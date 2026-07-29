@@ -1,0 +1,94 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+
+export type UserRole = 'ADMIN' | 'USER';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  companies: { id: string; name: string }[];
+  currentCompanyId: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+  switchCompany: (companyId: string) => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    // Load from local storage for persistence
+    const savedUser = localStorage.getItem('erp_user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    // Mock login logic
+    if (email === 'admin@erp.com' && password === 'admin') {
+      const newUser: User = {
+        id: '1',
+        name: 'Admin User',
+        email,
+        role: 'ADMIN',
+        companies: [
+          { id: 'COM-0001', name: 'Nomu Corp' },
+          { id: 'COM-0002', name: 'Nomu Retail' }
+        ],
+        currentCompanyId: 'COM-0001'
+      };
+      setUser(newUser);
+      localStorage.setItem('erp_user', JSON.stringify(newUser));
+    } else if (email === 'user@erp.com' && password === 'user') {
+      const newUser: User = {
+        id: '2',
+        name: 'Regular User',
+        email,
+        role: 'USER',
+        companies: [
+          { id: 'COM-0001', name: 'Nomu Corp' }
+        ],
+        currentCompanyId: 'COM-0001'
+      };
+      setUser(newUser);
+      localStorage.setItem('erp_user', JSON.stringify(newUser));
+    } else {
+      throw new Error('Invalid credentials. Use admin@erp.com / admin or user@erp.com / user');
+    }
+  };
+
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem('erp_user');
+  };
+
+  const switchCompany = (companyId: string) => {
+    if (user) {
+      const updatedUser = { ...user, currentCompanyId: companyId };
+      setUser(updatedUser);
+      localStorage.setItem('erp_user', JSON.stringify(updatedUser));
+    }
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, login, logout, switchCompany }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

@@ -1,0 +1,868 @@
+/**
+ * Nomu ERP - Google Apps Script Backend Foundation
+ */
+
+const DB_VERSION = "1.0.0";
+const APP_VERSION = "1.0.0";
+
+const SCHEMA = {
+  Companies: [
+    "CompanyID", "CompanyCode", "LegalNameAR", "LegalNameEN", "BrandNameAR", "BrandNameEN", 
+    "LogoURL", "CommercialRegistration", "VATNumber", "Phone", "WhatsApp", "Email", "Website", 
+    "Country", "City", "AddressAR", "AddressEN", "Currency", "Timezone", "DefaultLanguage", 
+    "DateFormat", "Status", "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted"
+  ],
+  Users: [
+    "UserID", "CompanyID", "UserCode", "FullNameAR", "FullNameEN", "Email", "Mobile", 
+    "PasswordHash", "RoleID", "EmployeeID", "PreferredLanguage", "Status", "LastLoginAt", 
+    "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted"
+  ],
+  Roles: [
+    "RoleID", "CompanyID", "RoleCode", "RoleNameAR", "RoleNameEN", "DescriptionAR", 
+    "DescriptionEN", "IsSystemRole", "Status", "CreatedAt", "UpdatedAt", "IsDeleted"
+  ],
+  Permissions: [
+    "PermissionID", "PermissionCode", "ModuleCode", "ActionCode", "PermissionNameAR", 
+    "PermissionNameEN", "DescriptionAR", "DescriptionEN", "CreatedAt"
+  ],
+  RolePermissions: [
+    "RolePermissionID", "CompanyID", "RoleID", "PermissionID", "IsAllowed", "CreatedAt", "CreatedBy"
+  ],
+  Employees: [
+    "EmployeeID", "CompanyID", "EmployeeCode", "Alias", "ArabicName", "EnglishName", 
+    "Mobile", "Email", "NationalID", "JobTitleAR", "JobTitleEN", "DepartmentID", "HireDate", 
+    "BasicSalary", "CommissionType", "Status", "Notes", "CreatedAt", "UpdatedAt", 
+    "CreatedBy", "UpdatedBy", "IsDeleted", "DeletedAt", "DeletedBy"
+  ],
+  Departments: [
+    "DepartmentID", "CompanyID", "DepartmentCode", "DepartmentNameAR", "DepartmentNameEN", 
+    "ManagerEmployeeID", "Status", "CreatedAt", "UpdatedAt", "IsDeleted"
+  ],
+  Products: [
+    "ProductID", "CompanyID", "ProductCode", "SKU", "Barcode", "ArabicName", "EnglishName", 
+    "Category", "UnitType", "SellingPrice", "SellingPriceExVAT", "SellingPriceIncVAT", "PurchaseCostExVAT", "PurchaseCostIncVAT", "VATRate", "AvailableQuantity", "ProfitAmount", "ProfitMargin", "DefaultCommission", "ImageURL", "Status", "Notes", 
+    "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted"
+  ],
+  ProductCategories: [
+    "CategoryID", "CompanyID", "CategoryCode", "CategoryNameAR", "CategoryNameEN", "Status", 
+    "CreatedAt", "UpdatedAt", "IsDeleted"
+  ],
+  Units: [
+    "UnitID", "CompanyID", "UnitCode", "UnitNameAR", "UnitNameEN", "Status", "CreatedAt", "UpdatedAt", "IsDeleted"
+  ],
+  Settings: [
+    "SettingID", "CompanyID", "SettingGroup", "SettingKey", "SettingValue", "ValueType", 
+    "DescriptionAR", "DescriptionEN", "IsPublic", "CreatedAt", "UpdatedAt", "UpdatedBy"
+  ],
+  NumberSequences: [
+    "SequenceID", "CompanyID", "SequenceKey", "Prefix", "Year", "LastNumber", "PaddingLength", 
+    "ResetPolicy", "UpdatedAt"
+  ],
+  AuditLogs: [
+    "AuditLogID", "CompanyID", "UserID", "ModuleCode", "ActionCode", "EntityType", "EntityID", 
+    "OldDataJSON", "NewDataJSON", "IPAddress", "UserAgent", "CreatedAt"
+  ],
+  CommissionReceipts: [
+    "ReceiptID", "CompanyID", "ReceiptNumber", "EmployeeID", "ReceiptDate", "ReceiptTime", 
+    "CommissionSystem", "GrossCommission", "DiscountTotal", "NetCommission", "RequiredAmount", 
+    "PaidInvoicesAmount", "Balance", "Status", "Notes", "CreatedAt", "UpdatedAt", "CreatedBy", 
+    "UpdatedBy", "IsDeleted"
+  ],
+  CommissionReceiptItems: [
+    "ReceiptItemID", "CompanyID", "ReceiptID", "ProductID", "Quantity", "UnitCommission", 
+    "TotalCommission", "CreatedAt"
+  ],
+  OrderCountCommissions: [
+    "OrderCommissionID", "CompanyID", "ReceiptID", "EmployeeID", "CommissionMonth", 
+    "OrdersCount", "ThresholdOrders", "FirstTierRate", "SecondTierRate", "FirstTierOrders", 
+    "SecondTierOrders", "FirstTierTotal", "SecondTierTotal", "GrossCommission", "CreatedAt"
+  ],
+  ReceiptDiscounts: [
+    "DiscountID", "CompanyID", "ReceiptID", "DiscountCode", "Description", "Amount", "CreatedAt"
+  ],
+  DailyClosings: [
+    "ClosingID", "CompanyID", "ClosingNumber", "EmployeeID", "ReceiptID", "ClosingDate", 
+    "RequiredAmount", "PaidInvoicesAmount", "Balance", "Status", "Notes", "CreatedAt", 
+    "UpdatedAt", "CreatedBy", "IsDeleted"
+  ],
+  MonthlyClosings: [
+    "MonthlyClosingID", "CompanyID", "EmployeeID", "ClosingYear", "ClosingMonth", "TotalOrders", 
+    "GrossCommission", "TotalDiscounts", "NetCommission", "TotalRequiredAmount", 
+    "TotalPaidInvoices", "FinalBalance", "Status", "ClosedAt", "ClosedBy", "CreatedAt", "UpdatedAt"
+  ]
+};
+
+function generateUUID() {
+  return Utilities.getUuid();
+}
+
+function getTimestamp() {
+  return new Date().toISOString();
+}
+
+function responseOk(data, message = "Success") {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: true,
+    data: data,
+    message: message,
+    error: null,
+    timestamp: getTimestamp()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function responseError(message, code = "ERROR", details = "") {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: false,
+    data: null,
+    message: message,
+    error: {
+      code: code,
+      details: details
+    },
+    timestamp: getTimestamp()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// --- CORE DB FUNCTIONS ---
+function getTableData(tableName, filters = {}) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(tableName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  
+  const headers = data[0];
+  const rows = data.slice(1);
+  
+  const results = rows.map(row => {
+    let obj = {};
+    headers.forEach((header, index) => {
+      obj[header] = row[index];
+    });
+    return obj;
+  });
+
+  return results.filter(row => {
+    const isDel = String(row.IsDeleted).toLowerCase() === 'true' || row.IsDeleted === 1;
+    if (isDel && !filters.includeDeleted) return false;
+    for (let key in filters) {
+      if (key === 'includeDeleted') continue;
+      if (row[key] !== filters[key]) return false;
+    }
+    return true;
+  });
+}
+
+function insertRow(tableName, obj) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(tableName);
+  if (!sheet) throw new Error("Table not found: " + tableName);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  const rowData = headers.map(header => {
+    return obj[header] !== undefined ? obj[header] : "";
+  });
+  
+  sheet.appendRow(rowData);
+  return obj;
+}
+
+function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(tableName);
+  if (!sheet) throw new Error("Table not found: " + tableName);
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) throw new Error("Record not found");
+  
+  const headers = data[0];
+  const pkIndex = headers.indexOf(primaryKeyField);
+  
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][pkIndex] === primaryKeyValue) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  if (rowIndex === -1) throw new Error("Record not found");
+  
+  // update
+  for (let key in updateObj) {
+    let colIndex = headers.indexOf(key);
+    if (colIndex !== -1) {
+      sheet.getRange(rowIndex, colIndex + 1).setValue(updateObj[key]);
+    }
+  }
+  
+  return true;
+}
+
+function getNextSequence(companyId, sequenceKey, prefix) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000); // wait up to 10 seconds
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("NumberSequences");
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const currentYear = new Date().getFullYear();
+    
+    let rowIndex = -1;
+    let lastNumber = 0;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][headers.indexOf('CompanyID')] === companyId && data[i][headers.indexOf('SequenceKey')] === sequenceKey) {
+        rowIndex = i + 1;
+        lastNumber = data[i][headers.indexOf('LastNumber')];
+        let year = data[i][headers.indexOf('Year')];
+        let resetPolicy = data[i][headers.indexOf('ResetPolicy')];
+        if (resetPolicy === 'YEARLY' && year !== currentYear) {
+          lastNumber = 0;
+        }
+        break;
+      }
+    }
+    
+    const nextNumber = lastNumber + 1;
+    
+    if (rowIndex === -1) {
+      insertRow("NumberSequences", {
+        SequenceID: generateUUID(),
+        CompanyID: companyId,
+        SequenceKey: sequenceKey,
+        Prefix: prefix,
+        Year: currentYear,
+        LastNumber: nextNumber,
+        PaddingLength: 6,
+        ResetPolicy: 'YEARLY',
+        UpdatedAt: getTimestamp()
+      });
+    } else {
+      updateRow("NumberSequences", "SequenceID", data[rowIndex-1][headers.indexOf('SequenceID')], {
+        LastNumber: nextNumber,
+        Year: currentYear,
+        UpdatedAt: getTimestamp()
+      });
+    }
+    
+    // Format: PREFIX-YYYY-000001
+    const paddingLength = 6;
+    const numberStr = nextNumber.toString().padStart(paddingLength, '0');
+    return `${prefix}-${currentYear}-${numberStr}`;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function logAudit(companyId, userId, moduleCode, actionCode, entityType, entityId, oldData, newData) {
+  insertRow("AuditLogs", {
+    AuditLogID: generateUUID(),
+    CompanyID: companyId,
+    UserID: userId || 'SYSTEM',
+    ModuleCode: moduleCode,
+    ActionCode: actionCode,
+    EntityType: entityType,
+    EntityID: entityId,
+    OldDataJSON: oldData ? JSON.stringify(oldData) : "",
+    NewDataJSON: newData ? JSON.stringify(newData) : "",
+    IPAddress: "",
+    UserAgent: "",
+    CreatedAt: getTimestamp()
+  });
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput("Nomu ERP Backend");
+}
+
+function doPost(e) {
+  try {
+    const requestData = JSON.parse(e.postData.contents);
+    const action = requestData.action;
+    const payload = requestData.payload || {};
+
+    switch (action) {
+      case 'GET_SYSTEM_HEALTH': return responseOk(getSystemHealth());
+      case 'INITIALIZE_DATABASE': return responseOk(initializeDatabase());
+      
+      // EMPLOYEES
+      case 'GET_EMPLOYEES': return responseOk(getTableData('Employees', {CompanyID: payload.CompanyID, includeDeleted: true}));
+      case 'CREATE_EMPLOYEE': return responseOk(createEmployee(payload));
+      case 'UPDATE_EMPLOYEE': return responseOk(updateEmployee(payload));
+      case 'DELETE_EMPLOYEE': return responseOk(deleteEmployee(payload));
+      case 'RESTORE_EMPLOYEE': return responseOk(restoreEmployee(payload));
+      
+      // PRODUCTS
+      case 'GET_PRODUCTS': return responseOk(getTableData('Products', {CompanyID: payload.CompanyID}));
+      case 'SYNC_PRODUCT_IMAGES': return responseOk(syncProductImages(payload));
+      case 'CREATE_PRODUCT': return responseOk(createProduct(payload));
+      case 'UPDATE_PRODUCT': return responseOk(updateProduct(payload));
+      case 'SEED_DEFAULT_PRODUCTS': return responseOk(seedDefaultProducts(payload));
+      
+      // SETTINGS
+      case 'GET_COMMISSION_SETTINGS': return responseOk(getSettings(payload.CompanyID, 'commissions'));
+      case 'UPDATE_COMMISSION_SETTINGS': return responseOk(updateSettings(payload.CompanyID, payload.settings));
+
+      // COMMISSIONS
+      case 'CREATE_ORDER_COUNT_COMMISSION': return responseOk(createOrderCountCommission(payload));
+      case 'CREATE_PRODUCT_COMMISSION': return responseOk(createProductCommission(payload));
+      case 'GET_MONTHLY_EMPLOYEE_ORDER_TOTAL': return responseOk(getMonthlyEmployeeOrderTotal(payload));
+      case 'GET_COMMISSION_RECEIPTS': return responseOk(getCommissionReceipts(payload));
+
+      // QUOTES
+      case 'GET_OFFERS': return handleGetOffers(payload);
+      case 'GET_OFFER': return handleGetOffer(payload);
+      case 'CREATE_OFFER': return handleCreateOffer(payload);
+      case 'UPDATE_OFFER': return handleUpdateOffer(payload);
+      case 'DELETE_OFFER': return handleDeleteOffer(payload);
+
+
+      default:
+        return responseError("Unknown action requested", "UNKNOWN_ACTION");
+    }
+  } catch (error) {
+    return responseError("Server error processing request", "SERVER_ERROR", error.toString() + "\n" + error.stack);
+  }
+}
+
+// --- IMPLEMENTATIONS ---
+
+function getSystemHealth() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allSheets = ss.getSheets().map(s => s.getName());
+  const requiredSheets = Object.keys(SCHEMA);
+  return {
+    gasConnected: true,
+    sheetsAccessible: true,
+    existingSheets: requiredSheets.filter(s => allSheets.includes(s)),
+    missingSheets: requiredSheets.filter(s => !allSheets.includes(s)),
+    lastInitializedAt: PropertiesService.getScriptProperties().getProperty('lastInitializedAt'),
+    coreRecordsCount: 0, // Simplified
+    databaseVersion: DB_VERSION,
+    appVersion: APP_VERSION
+  };
+}
+
+function initializeDatabase() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  for (const [sheetName, headers] of Object.entries(SCHEMA)) {
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) sheet = ss.insertSheet(sheetName);
+    const existingHeaders = sheet.getLastRow() > 0 ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0] : [];
+    if (existingHeaders.length === 0) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+      sheet.setFrozenRows(1);
+    } else {
+      let colIndex = existingHeaders.length + 1;
+      for (const header of headers) {
+        if (!existingHeaders.includes(header)) {
+          sheet.getRange(1, colIndex).setValue(header);
+          colIndex++;
+        }
+      }
+    }
+  }
+  
+  // Default Company
+  const companiesSheet = ss.getSheetByName("Companies");
+  if (companiesSheet.getLastRow() <= 1) {
+    const companyId = generateUUID();
+    let comp = {};
+    SCHEMA.Companies.forEach(k => comp[k] = "");
+    comp.CompanyID = companyId;
+    comp.CompanyCode = "COM-0001";
+    comp.LegalNameAR = "مؤسسة المستهلك الأخير";
+    comp.LegalNameEN = "Final Consumer Establishment";
+    comp.BrandNameAR = "ريجين";
+    comp.BrandNameEN = "Regine";
+    comp.Currency = "SAR";
+    comp.Timezone = "Asia/Riyadh";
+    comp.DefaultLanguage = "ar";
+    comp.Status = "ACTIVE";
+    comp.CreatedAt = getTimestamp();
+    insertRow("Companies", comp);
+    
+    // Seed settings
+    insertRow("Settings", { SettingID: generateUUID(), CompanyID: companyId, SettingGroup: "commissions", SettingKey: "monthly_threshold", SettingValue: "250", ValueType: "NUMBER", CreatedAt: getTimestamp() });
+    insertRow("Settings", { SettingID: generateUUID(), CompanyID: companyId, SettingGroup: "commissions", SettingKey: "first_tier_rate", SettingValue: "3", ValueType: "NUMBER", CreatedAt: getTimestamp() });
+    insertRow("Settings", { SettingID: generateUUID(), CompanyID: companyId, SettingGroup: "commissions", SettingKey: "second_tier_rate", SettingValue: "4", ValueType: "NUMBER", CreatedAt: getTimestamp() });
+  }
+
+  PropertiesService.getScriptProperties().setProperty('lastInitializedAt', getTimestamp());
+  return { status: "success" };
+}
+
+function createEmployee(payload) {
+  if (payload.Mobile) {
+    const existing = getTableData('Employees', {CompanyID: payload.CompanyID, Mobile: payload.Mobile});
+    if (existing.length > 0) throw new Error("DuplicateMobile");
+  }
+  const code = getNextSequence(payload.CompanyID, 'EMPLOYEE', 'EMP');
+  const emp = {
+    ...payload,
+    EmployeeID: generateUUID(),
+    EmployeeCode: code,
+    CreatedAt: getTimestamp(),
+    UpdatedAt: getTimestamp(),
+    IsDeleted: false
+  };
+  insertRow('Employees', emp);
+  logAudit(payload.CompanyID, '', 'EMPLOYEE', 'CREATE', 'Employee', emp.EmployeeID, null, emp);
+  return emp;
+}
+
+function updateEmployee(payload) {
+  if (payload.Mobile) {
+    const existing = getTableData('Employees', {CompanyID: payload.CompanyID, Mobile: payload.Mobile});
+    if (existing.length > 0 && existing[0].EmployeeID !== payload.EmployeeID) throw new Error("DuplicateMobile");
+  }
+  payload.UpdatedAt = getTimestamp();
+  updateRow('Employees', 'EmployeeID', payload.EmployeeID, payload);
+  return payload;
+}
+
+
+function deleteEmployee(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Employees');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    // Ensure required columns exist
+    const requiredColumns = ['IsDeleted', 'DeletedAt', 'Status', 'UpdatedAt'];
+    let added = false;
+    requiredColumns.forEach(col => {
+      if (!headers.includes(col)) {
+        sheet.insertColumnAfter(sheet.getLastColumn());
+        sheet.getRange(1, sheet.getLastColumn() + 1).setValue(col);
+        added = true;
+      }
+    });
+    
+    updateRow('Employees', 'EmployeeID', payload.EmployeeID, { 
+      IsDeleted: true, 
+      Status: 'INACTIVE',
+      DeletedAt: getTimestamp(),
+      UpdatedAt: getTimestamp()
+    });
+    return { success: true, employeeId: payload.EmployeeID, deleted: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function restoreEmployee(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    updateRow('Employees', 'EmployeeID', payload.EmployeeID, { 
+      IsDeleted: false, 
+      Status: 'ACTIVE',
+      DeletedAt: '',
+      UpdatedAt: getTimestamp()
+    });
+    return { success: true, employeeId: payload.EmployeeID, restored: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function createProduct(payload) {
+  const code = getNextSequence(payload.CompanyID, 'PRODUCT', 'PRD');
+  const sku = payload.SKU || code;
+  const prd = {
+    ...payload,
+    ProductID: generateUUID(),
+    ProductCode: code,
+    SKU: sku,
+    CreatedAt: getTimestamp(),
+    UpdatedAt: getTimestamp(),
+    IsDeleted: false
+  };
+  insertRow('Products', prd);
+  return prd;
+}
+
+function updateProduct(payload) {
+  payload.UpdatedAt = getTimestamp();
+  updateRow('Products', 'ProductID', payload.ProductID, payload);
+  return payload;
+}
+
+function seedDefaultProducts(payload) {
+  const companyId = payload.CompanyID;
+  const products = getTableData('Products', {CompanyID: companyId});
+  if (products.length > 0) return { seeded: false };
+  
+  const defaults = [
+    { ArabicName: "مناديل ريجين 40 عبوة — كرتون", DefaultCommission: 9 },
+    { ArabicName: "مناديل ريجين تعليق — شدة", DefaultCommission: 5 },
+    { ArabicName: "بكج مناديل ريجين الشامل", DefaultCommission: 5 },
+    { ArabicName: "مجموعة الورقيات", DefaultCommission: 5 },
+    { ArabicName: "رول مغاسل 300 متر — كرتون", DefaultCommission: 5 },
+    { ArabicName: "رول مطبخ — كرتون", DefaultCommission: 5 },
+    { ArabicName: "مناديل انترفولد — كرتون", DefaultCommission: 5 },
+    { ArabicName: "مناديل حمام — كرتون", DefaultCommission: 5 },
+    { ArabicName: "أكياس نفايات 55 جالون", DefaultCommission: 5 },
+    { ArabicName: "أكياس نفايات 10 جالون", DefaultCommission: 5 },
+    { ArabicName: "سفرة طعام", DefaultCommission: 5 },
+    { ArabicName: "قصدير", DefaultCommission: 5 },
+    { ArabicName: "رول تغليف", DefaultCommission: 5 },
+    { ArabicName: "صابون أيدي رغوة", DefaultCommission: 5 },
+    { ArabicName: "معطر أرضيات", DefaultCommission: 5 },
+    { ArabicName: "معطر ملابس", DefaultCommission: 5 },
+    { ArabicName: "ملطف جو", DefaultCommission: 5 },
+    { ArabicName: "مطهر", DefaultCommission: 5 },
+    { ArabicName: "شامبو عبايات", DefaultCommission: 5 },
+    { ArabicName: "مسحوق غسيل", DefaultCommission: 5 },
+    { ArabicName: "ملمع زجاج", DefaultCommission: 5 },
+    { ArabicName: "سائل جلي (فيري الوزير)", DefaultCommission: 5 }
+  ];
+  
+  defaults.forEach(d => {
+    createProduct({
+      CompanyID: companyId,
+      ArabicName: d.ArabicName,
+      EnglishName: d.ArabicName,
+      SellingPrice: 0,
+      DefaultCommission: d.DefaultCommission,
+      Status: 'ACTIVE'
+    });
+  });
+  
+  return { seeded: true };
+}
+
+function getSettings(companyId, group) {
+  const records = getTableData('Settings', {CompanyID: companyId, SettingGroup: group});
+  let settings = {};
+  records.forEach(r => {
+    settings[r.SettingKey] = r.SettingValue;
+  });
+  return settings;
+}
+
+function updateSettings(companyId, settingsObj) {
+  const records = getTableData('Settings', {CompanyID: companyId, SettingGroup: 'commissions'});
+  const existingKeys = records.map(r => r.SettingKey);
+  
+  for (let key in settingsObj) {
+    if (existingKeys.includes(key)) {
+      const rec = records.find(r => r.SettingKey === key);
+      updateRow('Settings', 'SettingID', rec.SettingID, { SettingValue: settingsObj[key].toString(), UpdatedAt: getTimestamp() });
+    } else {
+      insertRow('Settings', {
+        SettingID: generateUUID(),
+        CompanyID: companyId,
+        SettingGroup: 'commissions',
+        SettingKey: key,
+        SettingValue: settingsObj[key].toString(),
+        ValueType: 'STRING',
+        CreatedAt: getTimestamp()
+      });
+    }
+  }
+  return true;
+}
+
+function getMonthlyEmployeeOrderTotal(payload) {
+  const { CompanyID, EmployeeID, CommissionMonth } = payload;
+  const commissions = getTableData('OrderCountCommissions', { CompanyID, EmployeeID, CommissionMonth });
+  let total = 0;
+  commissions.forEach(c => {
+    total += parseInt(c.OrdersCount || 0, 10);
+  });
+  return { totalOrders: total };
+}
+
+function createOrderCountCommission(payload) {
+  const { CompanyID, EmployeeID, OrdersCount, CommissionMonth, ReceiptDate, ThresholdOrders, FirstTierRate, SecondTierRate, Notes } = payload;
+  
+  // recalculate to ensure safety
+  const pastOrders = getMonthlyEmployeeOrderTotal({CompanyID, EmployeeID, CommissionMonth}).totalOrders;
+  const newTotal = pastOrders + parseInt(OrdersCount, 10);
+  
+  let firstTierOrders = 0;
+  let secondTierOrders = 0;
+  
+  for(let i = pastOrders + 1; i <= newTotal; i++) {
+    if (i <= ThresholdOrders) firstTierOrders++;
+    else secondTierOrders++;
+  }
+  
+  const firstTierTotal = firstTierOrders * FirstTierRate;
+  const secondTierTotal = secondTierOrders * SecondTierRate;
+  const grossCommission = firstTierTotal + secondTierTotal;
+  
+  const receiptNum = getNextSequence(CompanyID, 'RECEIPT', 'RC');
+  const receiptId = generateUUID();
+  
+  const receipt = {
+    ReceiptID: receiptId,
+    CompanyID: CompanyID,
+    ReceiptNumber: receiptNum,
+    EmployeeID: EmployeeID,
+    ReceiptDate: ReceiptDate,
+    ReceiptTime: getTimestamp(),
+    CommissionSystem: 'ORDER_COUNT',
+    GrossCommission: grossCommission,
+    DiscountTotal: 0,
+    NetCommission: grossCommission,
+    RequiredAmount: 0,
+    PaidInvoicesAmount: 0,
+    Balance: 0,
+    Status: 'COMPLETED',
+    Notes: Notes,
+    CreatedAt: getTimestamp(),
+    IsDeleted: false
+  };
+  
+  insertRow('CommissionReceipts', receipt);
+  
+  const orderComm = {
+    OrderCommissionID: generateUUID(),
+    CompanyID: CompanyID,
+    ReceiptID: receiptId,
+    EmployeeID: EmployeeID,
+    CommissionMonth: CommissionMonth,
+    OrdersCount: OrdersCount,
+    ThresholdOrders: ThresholdOrders,
+    FirstTierRate: FirstTierRate,
+    SecondTierRate: SecondTierRate,
+    FirstTierOrders: firstTierOrders,
+    SecondTierOrders: secondTierOrders,
+    FirstTierTotal: firstTierTotal,
+    SecondTierTotal: secondTierTotal,
+    GrossCommission: grossCommission,
+    CreatedAt: getTimestamp()
+  };
+  
+  insertRow('OrderCountCommissions', orderComm);
+  logAudit(CompanyID, '', 'COMMISSIONS', 'CREATE', 'CommissionReceipts', receiptId, null, receipt);
+  
+  return { receipt, orderComm };
+}
+
+function createProductCommission(payload) {
+  const { CompanyID, EmployeeID, ReceiptDate, Items, Discounts, RequiredAmount, PaidInvoicesAmount, Notes } = payload;
+  
+  let grossCommission = 0;
+  Items.forEach(item => {
+    grossCommission += (parseFloat(item.Quantity) * parseFloat(item.UnitCommission));
+  });
+  
+  let discountTotal = 0;
+  Discounts.forEach(d => {
+    discountTotal += parseFloat(d.Amount);
+  });
+  
+  let netCommission = grossCommission - discountTotal;
+  if (netCommission < 0) netCommission = 0;
+  
+  const balance = parseFloat(RequiredAmount) - parseFloat(PaidInvoicesAmount);
+  
+  const receiptNum = getNextSequence(CompanyID, 'RECEIPT', 'RC');
+  const receiptId = generateUUID();
+  
+  const receipt = {
+    ReceiptID: receiptId,
+    CompanyID: CompanyID,
+    ReceiptNumber: receiptNum,
+    EmployeeID: EmployeeID,
+    ReceiptDate: ReceiptDate,
+    ReceiptTime: getTimestamp(),
+    CommissionSystem: 'PRODUCT_COMMISSION',
+    GrossCommission: grossCommission,
+    DiscountTotal: discountTotal,
+    NetCommission: netCommission,
+    RequiredAmount: RequiredAmount,
+    PaidInvoicesAmount: PaidInvoicesAmount,
+    Balance: balance,
+    Status: 'COMPLETED',
+    Notes: Notes,
+    CreatedAt: getTimestamp(),
+    IsDeleted: false
+  };
+  
+  insertRow('CommissionReceipts', receipt);
+  
+  Items.forEach(item => {
+    insertRow('CommissionReceiptItems', {
+      ReceiptItemID: generateUUID(),
+      CompanyID: CompanyID,
+      ReceiptID: receiptId,
+      ProductID: item.ProductID,
+      Quantity: item.Quantity,
+      UnitCommission: item.UnitCommission,
+      TotalCommission: parseFloat(item.Quantity) * parseFloat(item.UnitCommission),
+      CreatedAt: getTimestamp()
+    });
+  });
+  
+  Discounts.forEach(d => {
+    insertRow('ReceiptDiscounts', {
+      DiscountID: generateUUID(),
+      CompanyID: CompanyID,
+      ReceiptID: receiptId,
+      DiscountCode: d.DiscountCode || 'DISC',
+      Description: d.Description || '',
+      Amount: d.Amount,
+      CreatedAt: getTimestamp()
+    });
+  });
+  
+  // Create daily closing
+  const closingNum = getNextSequence(CompanyID, 'CLOSING', 'CL');
+  insertRow('DailyClosings', {
+    ClosingID: generateUUID(),
+    CompanyID: CompanyID,
+    ClosingNumber: closingNum,
+    EmployeeID: EmployeeID,
+    ReceiptID: receiptId,
+    ClosingDate: ReceiptDate,
+    RequiredAmount: RequiredAmount,
+    PaidInvoicesAmount: PaidInvoicesAmount,
+    Balance: balance,
+    Status: 'CLOSED',
+    CreatedAt: getTimestamp()
+  });
+  
+  logAudit(CompanyID, '', 'COMMISSIONS', 'CREATE', 'CommissionReceipts', receiptId, null, receipt);
+  
+  return receipt;
+}
+
+function getCommissionReceipts(payload) {
+  const receipts = getTableData('CommissionReceipts', {CompanyID: payload.CompanyID});
+  // In a real app we would join employee names, etc. We can do that on frontend or here.
+  return receipts;
+}
+
+
+function syncProductImages(payload) {
+  const props = PropertiesService.getScriptProperties();
+  const cloudName = props.getProperty('CLOUDINARY_CLOUD_NAME');
+  const apiKey = props.getProperty('CLOUDINARY_API_KEY');
+  const apiSecret = props.getProperty('CLOUDINARY_API_SECRET');
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    return {
+      success: false,
+      message: 'Cloudinary credentials are not set in Script Properties. Please add CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.',
+      totalProducts: 0, totalImages: 0, matchCount: 0, noMatchCount: 0, updatedCount: 0, duplicates: []
+    };
+  }
+
+  // Fetch images from Cloudinary Admin API
+  let allImages = [];
+  let nextCursor = null;
+  const baseUrl = `https://api.cloudinary.com/v1_1/${cloudName}/resources/search`;
+
+  do {
+    const query = {
+      expression: "resource_type:image",
+      with_field: ["tags", "context"],
+      max_results: 500
+    };
+    if (nextCursor) {
+      query.next_cursor = nextCursor;
+    }
+
+    const options = {
+      method: 'post',
+      headers: {
+        "Authorization": "Basic " + Utilities.base64Encode(apiKey + ":" + apiSecret)
+      },
+      contentType: 'application/json',
+      payload: JSON.stringify(query),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(baseUrl, options);
+    if (response.getResponseCode() !== 200) {
+      return { success: false, message: 'Cloudinary API error: ' + response.getContentText(), totalProducts: 0, totalImages: 0, matchCount: 0, noMatchCount: 0, updatedCount: 0, duplicates: [] };
+    }
+
+    const data = JSON.parse(response.getContentText());
+    allImages = allImages.concat(data.resources || []);
+    nextCursor = data.next_cursor;
+
+  } while (nextCursor);
+
+  const normalize = (name) => {
+    if (!name) return '';
+    let n = String(name).replace(/\.[^/.]+$/, "");
+    return n.trim().toLowerCase();
+  };
+
+  const cloudinaryMap = new Map();
+  const duplicates = [];
+
+  allImages.forEach(img => {
+    const dName = normalize(img.display_name);
+    const fName = normalize(img.original_filename || img.filename);
+    const pubId = normalize(img.public_id.split('/').pop());
+
+    const matchedName = dName || fName || pubId;
+    if (matchedName) {
+       if (cloudinaryMap.has(matchedName)) {
+         duplicates.push(matchedName);
+       } else {
+         cloudinaryMap.set(matchedName, img.secure_url);
+       }
+    }
+  });
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Products');
+  if (!sheet) return { success: false, message: 'Products sheet not found', totalProducts: 0, totalImages: 0, matchCount: 0, noMatchCount: 0, updatedCount: 0, duplicates: [] };
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { success: true, message: 'No products to sync', totalProducts: 0, totalImages: allImages.length, matchCount: 0, noMatchCount: 0, updatedCount: 0, duplicates };
+  
+  const headers = data[0];
+  const skuIndex = headers.indexOf('SKU');
+  const imageIndex = headers.indexOf('ImageURL');
+
+  if (skuIndex === -1) return { success: false, message: 'SKU column not found', totalProducts: 0, totalImages: 0, matchCount: 0, noMatchCount: 0, updatedCount: 0, duplicates: [] };
+
+  let colImageURL = imageIndex + 1;
+  if (imageIndex === -1) {
+    colImageURL = headers.length + 1;
+    sheet.getRange(1, colImageURL).setValue('ImageURL');
+  }
+
+  let matchCount = 0;
+  let noMatchCount = 0;
+  let updatedCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const sku = String(data[i][skuIndex]).trim();
+    if (!sku) continue;
+
+    const normalizedSku = sku.toLowerCase();
+    if (cloudinaryMap.has(normalizedSku)) {
+      const url = cloudinaryMap.get(normalizedSku);
+      if (imageIndex === -1 || data[i][imageIndex] !== url) {
+        sheet.getRange(i + 1, colImageURL).setValue(url);
+        updatedCount++;
+      }
+      matchCount++;
+    } else {
+      noMatchCount++;
+    }
+  }
+
+  return {
+    totalProducts: data.length - 1,
+    totalImages: allImages.length,
+    matchCount,
+    noMatchCount,
+    updatedCount,
+    duplicates
+  };
+}

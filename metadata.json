@@ -1,0 +1,6 @@
+{
+  "name": "Nomu ERP",
+  "description": "Multi-company ERP platform developed by NmoLabs",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
