@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -93,7 +94,7 @@ export function Employees() {
       if (res.success) {
         setIsFormOpen(false);
         resetForm();
-        alert('تم حفظ بيانات الموظف بنجاح.');
+        toast.success('تم حفظ بيانات الموظف بنجاح.');
         await queryClient.invalidateQueries({ queryKey: ['employees', companyId] });
       } else {
         console.error('Save error details:', res);
@@ -113,16 +114,16 @@ export function Employees() {
     mutationFn: (emp: Employee) => employeeService.deleteEmployee(emp.EmployeeID, companyId),
     onSuccess: async (res) => {
       if (res.success) {
-        alert('تم حذف الموظف بنجاح.');
+        toast.success('تم حذف الموظف بنجاح.');
         await queryClient.invalidateQueries({ queryKey: ['employees', companyId] });
       } else {
         console.error('Delete error details:', res);
-        alert('تعذر حذف الموظف. يرجى المحاولة لاحقاً.');
+        toast.error('تعذر حذف الموظف. يرجى المحاولة لاحقاً.');
       }
     },
     onError: (e: any) => {
       console.error('Delete network error:', e);
-      alert('تعذر الاتصال بالخادم.');
+      toast.error('تعذر الاتصال بالخادم.');
     }
   });
 

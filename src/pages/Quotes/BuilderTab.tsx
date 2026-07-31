@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { quoteService } from '@/services/quoteService';
@@ -158,6 +159,7 @@ export function BuilderTab({ cartItems, onUpdateItem, onRemoveItem, onClearCart,
       }
 
       if (response.success) {
+        toast.success(status === 'draft' ? 'تم حفظ العرض كمسودة' : 'تم اعتماد عرض السعر بنجاح');
         onSaveSuccess();
       } else {
         setSaveError(response.message || 'فشل حفظ العرض');

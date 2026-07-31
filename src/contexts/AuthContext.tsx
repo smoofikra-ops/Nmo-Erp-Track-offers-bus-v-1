@@ -40,8 +40,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         role: 'ADMIN',
         companies: [
-          { id: 'COM-0001', name: 'Nomu Corp' },
-          { id: 'COM-0002', name: 'Nomu Retail' }
+          { id: 'COM-0001', name: 'NmoLabs Corp' },
+          { id: 'COM-0002', name: 'NmoLabs Retail' }
         ],
         currentCompanyId: 'COM-0001'
       };
@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         role: 'USER',
         companies: [
-          { id: 'COM-0001', name: 'Nomu Corp' }
+          { id: 'COM-0001', name: 'NmoLabs Corp' }
         ],
         currentCompanyId: 'COM-0001'
       };

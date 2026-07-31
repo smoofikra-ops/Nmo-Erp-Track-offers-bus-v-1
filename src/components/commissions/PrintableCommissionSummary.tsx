@@ -1,5 +1,6 @@
 import React from 'react';
 import { CommissionRecord } from '@/types/commissions';
+import { useSettings } from '@/contexts/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Printer, X, Building2, CheckCircle2 } from 'lucide-react';
 
@@ -14,6 +15,7 @@ export function PrintableCommissionSummary({
   onClose,
   autoPrint = false,
 }: PrintableCommissionSummaryProps) {
+  const { settings } = useSettings();
   React.useEffect(() => {
     if (autoPrint) {
       const timer = setTimeout(() => {
@@ -72,13 +74,17 @@ export function PrintableCommissionSummary({
           <div className="flex items-center justify-between border-b-2 border-emerald-600 pb-6 mb-6">
             <div className="flex items-center gap-4">
               <div className="h-16 w-16 bg-emerald-700 text-white rounded-2xl flex items-center justify-center shadow-md print:border print:border-emerald-800">
-                <Building2 className="h-9 w-9" />
+                {settings?.LogoURL && settings?.ShowLogoOnPrint === 'true' ? (
+    <img src={settings.LogoURL} alt="Logo" className="w-full h-full object-contain rounded-2xl" />
+  ) : (
+    <Building2 className="h-9 w-9" />
+  )}
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">شركة نمو الفكرة للتجارة</h1>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">{settings?.CompanyNameAr || 'شركة نمو الفكرة للتجارة'}</h1>
                 <p className="text-xs text-slate-500 mt-0.5">قسم المحاسبة والمبيعات - إدارة العمولات</p>
                 <span className="inline-block mt-1 text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
-                  سجل تجاري: 1010892341
+                  {settings?.CommercialRegistration ? `سجل تجاري: ${settings.CommercialRegistration}` : 'سجل تجاري: 1010892341'}
                 </span>
               </div>
             </div>
@@ -244,22 +250,36 @@ export function PrintableCommissionSummary({
           )}
 
           {/* Signatures & Approvals */}
-          <div className="mt-10 pt-6 border-t border-slate-300 grid grid-cols-2 gap-8 text-center text-xs">
+          <div className="mt-10 pt-6 border-t border-slate-300 grid grid-cols-2 gap-8 text-center text-xs relative">
+            {settings.StampImageURL && (
+               <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20 pointer-events-none">
+                 <img src={settings.StampImageURL} alt="Stamp" className="w-32 h-32 object-contain" />
+               </div>
+            )}
             <div>
               <p className="font-bold text-slate-700 mb-10">توقيع المندوب</p>
               <div className="border-b border-slate-400 w-3/4 mx-auto mb-2"></div>
               <p className="text-[11px] font-medium text-slate-600">{record.employeeName}</p>
             </div>
             <div>
-              <p className="font-bold text-slate-700 mb-10">الاعتماد (المحاسب / المسؤول)</p>
+              <p className="font-bold text-slate-700 mb-2">الاعتماد (المحاسب / المسؤول)</p>
+              {settings.SignatureImageURL ? (
+                <img src={settings.SignatureImageURL} alt="Signature" className="h-8 mx-auto mb-2 object-contain" />
+              ) : (
+                <div className="h-8 mb-2"></div>
+              )}
               <div className="border-b border-slate-400 w-3/4 mx-auto mb-2"></div>
-              <p className="text-[11px] font-medium text-slate-600">إدارة الحسابات</p>
+              {settings?.SignatureImageURL ? (
+     <img src={settings.SignatureImageURL} alt="Signature" className="h-8 mx-auto mt-1 object-contain" />
+   ) : (
+     <p className="text-[11px] font-medium text-slate-600">إدارة الحسابات</p>
+   )}
             </div>
           </div>
 
           {/* Footer stamp */}
           <div className="mt-12 pt-4 border-t border-slate-100 text-center text-[10px] text-slate-400 flex justify-between items-center">
-            <span>تم استخراج هذا المستند تلقائياً عبر نظام Nomu ERP</span>
+            <span>تم استخراج هذا المستند تلقائياً عبر نظام {settings?.CompanyNameAr || 'NMO Labs Operations OS'}</span>
             <span>تاريخ الطباعة: {new Date().toLocaleString('ar-SA')}</span>
           </div>
         </div>

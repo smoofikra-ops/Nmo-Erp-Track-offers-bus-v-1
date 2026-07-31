@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { useAuth } from "@/contexts/AuthContext";
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -142,12 +143,12 @@ export function ProductCommission() {
       queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
       queryClient.invalidateQueries({ queryKey: ['commissionReceipts'] });
       
-      alert('تم حفظ سجل العمولة بنجاح');
+      toast.success('تم حفظ سجل العمولة بنجاح');
       navigate('/commission/records');
     },
     onError: (err: any) => {
       console.error(err);
-      alert('فشل الحفظ: ' + (err.message || 'خطأ غير معروف'));
+      toast.error('فشل الحفظ: ' + (err.message || 'خطأ غير معروف'));
     },
   });
 

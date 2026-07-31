@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +23,7 @@ export function SystemHealth() {
       }
     } catch (error) {
       console.error(error);
+      toast.error('تعذر الاتصال بالخادم.');
     } finally {
       setLoading(false);
     }
@@ -38,6 +40,9 @@ export function SystemHealth() {
       if (res.success) {
         setRepairReport(res.data);
         await fetchHealth();
+        toast.success('تمت تهيئة أو إصلاح قاعدة البيانات بنجاح.');
+      } else {
+        toast.error('حدث خطأ أثناء التهيئة.');
       }
     } catch (error) {
       console.error(error);

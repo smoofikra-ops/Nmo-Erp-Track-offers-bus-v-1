@@ -13,3 +13,10 @@ html[dir='ltr'] {
   text-align: left;
 }
 
+:root {
+  --primary-color: #4f46e5;
+}
+
+@theme {
+  --color-primary: var(--primary-color);
+}

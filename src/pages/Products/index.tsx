@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -89,7 +90,7 @@ export function Products() {
     if (sku) {
       setImageUrl(getProductImageUrl(sku));
     } else {
-      alert('الرجاء إدخال رمز SKU أولاً.');
+      toast.error('الرجاء إدخال رمز SKU أولاً.');
     }
   };
 
@@ -104,11 +105,11 @@ export function Products() {
     },
     onSuccess: async (res) => {
       if (res.success) {
-        alert('✅ تم حفظ التعديلات بنجاح.');
+        toast.success('تم حفظ التعديلات بنجاح.');
         resetForm();
         await queryClient.invalidateQueries({ queryKey: ['products', companyId] });
       } else {
-        alert('فشل الحفظ: ' + (res.message || 'خطأ غير معروف'));
+        toast.error('فشل الحفظ: ' + (res.message || 'خطأ غير معروف'));
       }
     }
   });
@@ -129,13 +130,13 @@ export function Products() {
       const response = await ApiClient.post('SYNC_PRODUCT_IMAGES', { companyId });
       if (response.success) {
         setSyncResult(response.data);
-        alert('تمت المزامنة بنجاح! يتم الآن إعادة تحميل المنتجات.');
+        toast.success('تمت المزامنة بنجاح! يتم الآن إعادة تحميل المنتجات.');
         refetch();
       } else {
-        alert('فشل المزامنة: ' + response.message);
+        toast.error('فشل المزامنة: ' + response.message);
       }
     } catch (e) {
-      alert('حدث خطأ أثناء المزامنة.');
+      toast.error('حدث خطأ أثناء المزامنة.');
     } finally {
       setIsSyncingImages(false);
     }
@@ -143,7 +144,7 @@ export function Products() {
   
   const handleSave = () => {
     if (!arabicName || !sku) {
-      alert('اسم المنتج ورمز SKU مطلوبان.');
+      toast.error('اسم المنتج ورمز SKU مطلوبان.');
       return;
     }
     const finalImageUrl = imageUrl || "";

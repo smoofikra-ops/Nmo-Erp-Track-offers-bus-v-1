@@ -1,17 +1,19 @@
 import React from 'react';
 import { Quote } from '@/types/quotes';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface PrintLayoutProps {
   quote: Quote;
 }
 
 export function PrintLayout({ quote }: PrintLayoutProps) {
+  const { settings } = useSettings();
   const companyProfile = {
-    name: 'شركة نومو للتجارة',
-    vatNumber: '310000000000003',
-    phone: '0500000000',
-    email: 'info@nomu.example.com',
-    address: 'الرياض، المملكة العربية السعودية'
+    name: settings.CompanyNameAr || 'شركة نومو للتجارة',
+    vatNumber: settings.VATNumber || '310000000000003',
+    phone: settings.Mobile || settings.Phone || '0500000000',
+    email: settings.Email || 'info@nomu.example.com',
+    address: settings.Address || 'الرياض، المملكة العربية السعودية'
   };
 
   return (

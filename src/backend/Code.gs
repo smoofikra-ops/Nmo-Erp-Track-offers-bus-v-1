@@ -1,5 +1,5 @@
 /**
- * Nomu ERP - Google Apps Script Backend Foundation
+ * NMO Labs Operations OS - Google Apps Script Backend Foundation
  */
 
 const DB_VERSION = "1.0.0";
@@ -301,7 +301,7 @@ function logAudit(companyId, userId, moduleCode, actionCode, entityType, entityI
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput("Nomu ERP Backend");
+  return ContentService.createTextOutput("NMO Labs Operations OS Backend");
 }
 
 function doPost(e) {
@@ -309,9 +309,17 @@ function doPost(e) {
     const requestData = JSON.parse(e.postData.contents);
     const action = requestData.action;
     const payload = requestData.payload || {};
+    const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+    payload.CompanyID = companyId; // Normalize
 
     switch (action) {
       case 'GET_SYSTEM_HEALTH': return responseOk(getSystemHealth());
+      case 'GET_SETTINGS': return responseOk(getSettings(payload));
+      case 'SAVE_SETTINGS': return responseOk(saveSettings(payload));
+      case 'UPDATE_SETTINGS': return responseOk(saveSettings(payload)); // same implementation as save
+      case 'UPLOAD_LOGO': return responseOk(uploadBase64Image(payload));
+      case 'UPLOAD_SIGNATURE': return responseOk(uploadBase64Image(payload));
+      case 'UPLOAD_STAMP': return responseOk(uploadBase64Image(payload));
       case 'INITIALIZE_DATABASE': return responseOk(initializeDatabase());
       
       // EMPLOYEES
@@ -573,36 +581,113 @@ function seedDefaultProducts(payload) {
   return { seeded: true };
 }
 
-function getSettings(companyId, group) {
-  const records = getTableData('Settings', {CompanyID: companyId, SettingGroup: group});
-  let settings = {};
-  records.forEach(r => {
+function getSettings(payload) {
+  const companyId = payload.companyId || payload.CompanyID || 'COM-0001';
+  
+  const companies = getTableData('Companies', { CompanyID: companyId });
+  const company = companies.length > 0 ? companies[0] : null;
+  
+  const settingsRecords = getTableData('Settings', { CompanyID: companyId });
+  
+  const settings = {};
+  
+  if (company) {
+    settings.CompanyNameAr = company.LegalNameAR || company.BrandNameAR || '';
+    settings.CompanyNameEn = company.LegalNameEN || company.BrandNameEN || '';
+    settings.LogoURL = company.LogoURL || '';
+    settings.CommercialRegistration = company.CommercialRegistration || '';
+    settings.VATNumber = company.VATNumber || '';
+    settings.Phone = company.Phone || '';
+    settings.Mobile = company.WhatsApp || '';
+    settings.Email = company.Email || '';
+    settings.Website = company.Website || '';
+    settings.Address = company.AddressAR || '';
+    settings.City = company.City || '';
+    settings.Country = company.Country || '';
+    settings.Currency = company.Currency || '';
+    settings.Timezone = company.Timezone || '';
+    settings.DefaultLanguage = company.DefaultLanguage || '';
+    settings.DateFormat = company.DateFormat || '';
+  }
+  
+  settingsRecords.forEach(r => {
     settings[r.SettingKey] = r.SettingValue;
   });
-  return settings;
+  
+  return { settings: settings };
 }
 
-function updateSettings(companyId, settingsObj) {
-  const records = getTableData('Settings', {CompanyID: companyId, SettingGroup: 'commissions'});
-  const existingKeys = records.map(r => r.SettingKey);
+function saveSettings(payload) {
+  const companyId = payload.companyId || payload.CompanyID || 'COM-0001';
+  const settingsObj = payload.settings || {};
   
-  for (let key in settingsObj) {
-    if (existingKeys.includes(key)) {
-      const rec = records.find(r => r.SettingKey === key);
-      updateRow('Settings', 'SettingID', rec.SettingID, { SettingValue: settingsObj[key].toString(), UpdatedAt: getTimestamp() });
-    } else {
-      insertRow('Settings', {
-        SettingID: generateUUID(),
-        CompanyID: companyId,
-        SettingGroup: 'commissions',
-        SettingKey: key,
-        SettingValue: settingsObj[key].toString(),
-        ValueType: 'STRING',
-        CreatedAt: getTimestamp()
-      });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  
+  try {
+    // 1. Update Company
+    const companies = getTableData('Companies', { CompanyID: companyId });
+    if (companies.length > 0) {
+      const company = companies[0];
+      const updateData = {};
+      
+      if ('CompanyNameAr' in settingsObj) { updateData.LegalNameAR = settingsObj.CompanyNameAr; updateData.BrandNameAR = settingsObj.CompanyNameAr; }
+      if ('CompanyNameEn' in settingsObj) { updateData.LegalNameEN = settingsObj.CompanyNameEn; updateData.BrandNameEN = settingsObj.CompanyNameEn; }
+      if ('LogoURL' in settingsObj) updateData.LogoURL = settingsObj.LogoURL;
+      if ('CommercialRegistration' in settingsObj) updateData.CommercialRegistration = settingsObj.CommercialRegistration;
+      if ('VATNumber' in settingsObj) updateData.VATNumber = settingsObj.VATNumber;
+      if ('Phone' in settingsObj) updateData.Phone = settingsObj.Phone;
+      if ('Mobile' in settingsObj) updateData.WhatsApp = settingsObj.Mobile;
+      if ('Email' in settingsObj) updateData.Email = settingsObj.Email;
+      if ('Website' in settingsObj) updateData.Website = settingsObj.Website;
+      if ('Address' in settingsObj) updateData.AddressAR = settingsObj.Address;
+      if ('City' in settingsObj) updateData.City = settingsObj.City;
+      if ('Country' in settingsObj) updateData.Country = settingsObj.Country;
+      if ('Currency' in settingsObj) updateData.Currency = settingsObj.Currency;
+      if ('Timezone' in settingsObj) updateData.Timezone = settingsObj.Timezone;
+      if ('DefaultLanguage' in settingsObj) updateData.DefaultLanguage = settingsObj.DefaultLanguage;
+      if ('DateFormat' in settingsObj) updateData.DateFormat = settingsObj.DateFormat;
+      
+      updateData.UpdatedAt = getTimestamp();
+      
+      if (Object.keys(updateData).length > 1) { // more than just UpdatedAt
+        updateRow('Companies', 'CompanyID', companyId, updateData);
+      }
     }
+    
+    // 2. Update Settings table
+    const existingSettings = getTableData('Settings', { CompanyID: companyId });
+    const existingKeys = existingSettings.map(r => r.SettingKey);
+    
+    const companyKeys = ['CompanyNameAr', 'CompanyNameEn', 'LogoURL', 'CommercialRegistration', 'VATNumber', 'Phone', 'Mobile', 'Email', 'Website', 'Address', 'City', 'Country', 'Currency', 'Timezone', 'DefaultLanguage', 'DateFormat'];
+    
+    for (let key in settingsObj) {
+      if (companyKeys.includes(key)) continue; // skip keys that go to Companies
+      
+      const val = settingsObj[key] !== null && settingsObj[key] !== undefined ? String(settingsObj[key]) : '';
+      
+      if (existingKeys.includes(key)) {
+        const rec = existingSettings.find(r => r.SettingKey === key);
+        updateRow('Settings', 'SettingID', rec.SettingID, { SettingValue: val, UpdatedAt: getTimestamp() });
+      } else {
+        insertRow('Settings', {
+          SettingID: generateUUID(),
+          CompanyID: companyId,
+          SettingGroup: 'general',
+          SettingKey: key,
+          SettingValue: val,
+          ValueType: 'STRING',
+          CreatedAt: getTimestamp(),
+          UpdatedAt: getTimestamp()
+        });
+      }
+    }
+    
+    SpreadsheetApp.flush();
+    return getSettings({ companyId });
+  } finally {
+    lock.releaseLock();
   }
-  return true;
 }
 
 function getMonthlyEmployeeOrderTotal(payload) {
