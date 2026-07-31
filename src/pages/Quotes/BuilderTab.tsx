@@ -1,266 +1,481 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { quoteService } from '@/services/quoteService';
-import { OfferItem, OfferAdjustment, QuoteOffer, OfferStatus } from '@/types/quotes';
-import { calculateOfferTotals, calculateOfferItem } from '@/features/quotes/utils/quoteCalculator';
+import { QuoteCartItem, QuoteAdjustment, Quote } from '@/types/quotes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, Calculator } from 'lucide-react';
+import { Plus, Minus, Trash2, Save, ShoppingCart, Percent, DollarSign, X } from 'lucide-react';
+import { getProductImageUrl, handleImageError } from '@/utils/imageUtils';
 
 interface BuilderTabProps {
-  items: OfferItem[];
-  setItems: React.Dispatch<React.SetStateAction<OfferItem[]>>;
-  adjustments: OfferAdjustment[];
-  setAdjustments: React.Dispatch<React.SetStateAction<OfferAdjustment[]>>;
-  onQuoteSaved: () => void;
+  cartItems: QuoteCartItem[];
+  onUpdateItem: (productId: string, updates: Partial<QuoteCartItem>) => void;
+  onRemoveItem: (productId: string) => void;
+  onClearCart: () => void;
+  editingQuote: Quote | null;
+  onSaveSuccess: () => void;
 }
 
-export function BuilderTab({ items, setItems, adjustments, setAdjustments, onQuoteSaved }: BuilderTabProps) {
-  const { t } = useTranslation();
+export function BuilderTab({ cartItems, onUpdateItem, onRemoveItem, onClearCart, editingQuote, onSaveSuccess }: BuilderTabProps) {
   const { user } = useAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
 
-  const [formData, setFormData] = useState({
-    title: '',
-    customerName: '',
-    customerPhone: '',
-    customerEmail: '',
-    customerAddress: '',
-    validUntil: '',
-    notes: '',
-    terms: '',
-  });
+  const [title, setTitle] = useState(editingQuote?.title || 'عرض سعر جديد');
+  const [customerName, setCustomerName] = useState(editingQuote?.customerName || '');
+  const [customerPhone, setCustomerPhone] = useState(editingQuote?.customerPhone || '');
+  const [validUntil, setValidUntil] = useState(editingQuote?.validUntil || '');
+  
+  const [adjustments, setAdjustments] = useState<QuoteAdjustment[]>(editingQuote?.adjustments || []);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
-  const totals = calculateOfferTotals(items, adjustments);
+  // Calculations
+  const totals = useMemo(() => {
+    let purchaseCostExVat = 0;
+    let purchaseCostIncVat = 0;
+    let retailValueExVat = 0;
+    let retailValueIncVat = 0;
+    let totalOfferUnits = 0;
+    let totalPieces = 0;
 
-  const handleUpdateItem = (index: number, updates: Partial<OfferItem>) => {
-    setItems(prev => prev.map((item, i) => {
-      if (i === index) {
-        const newQty = updates.quantity ?? item.quantity;
-        const newPrice = updates.unitSellingPriceIncVat ?? item.unitSellingPriceIncVat;
-        const subtotal = newQty * newPrice;
-        const vat = subtotal * 0.15;
-        const total = subtotal + vat;
-        const margin = newPrice > 0 ? ((newPrice - item.unitPurchaseCostIncVat) / newPrice) * 100 : 0;
-        
-        return {
-          ...item,
-          ...updates,
-          subtotal,
-          vatAmount: vat,
-          totalPriceIncVat: total,
-          margin
-        };
+    cartItems.forEach(item => {
+      purchaseCostExVat += item.unitPurchaseCostExVat * item.quantity;
+      purchaseCostIncVat += item.unitPurchaseCostIncVat * item.quantity;
+      retailValueExVat += item.unitSellingPriceExVat * item.quantity;
+      retailValueIncVat += item.unitSellingPriceIncVat * item.quantity;
+      totalOfferUnits += item.quantity;
+      if (item.piecesPerOfferUnit) {
+        totalPieces += item.quantity * item.piecesPerOfferUnit;
       }
-      return item;
-    }));
-  };
+    });
 
-  const handleRemoveItem = (index: number) => {
-    setItems(prev => prev.filter((_, i) => i !== index));
-  };
+    let discountTotal = 0;
+    let additionTotal = 0;
+    let internalExpenseTotal = 0;
 
-  const handleSave = async () => {
-    try {
-      const offerData: Omit<QuoteOffer, 'id' | 'offerNumber' | 'createdAt' | 'updatedAt'> = {
-        companyId,
-        title: formData.title || 'عرض سعر جديد',
-        customerName: formData.customerName,
-        customerPhone: formData.customerPhone,
-        customerEmail: formData.customerEmail,
-        customerAddress: formData.customerAddress,
-        validUntil: formData.validUntil ? new Date(formData.validUntil).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        items,
-        adjustments,
-        totals,
-        status: OfferStatus.Draft,
-        notes: formData.notes,
-        terms: formData.terms,
-        
-      };
+    adjustments.forEach(adj => {
+      let amount = 0;
+      if (adj.calculationType === 'fixed') {
+        amount = adj.value;
+      } else {
+        amount = retailValueIncVat * (adj.value / 100);
+      }
       
-      await quoteService.createOffer(offerData);
-      onQuoteSaved();
-    } catch (error) {
-      console.error('Error saving quote', error);
+      adj.calculatedAmount = amount; // update inline for render
+
+      if (adj.type === 'discount') discountTotal += amount;
+      if (adj.type === 'addition') additionTotal += amount;
+      if (adj.type === 'internal_expense') internalExpenseTotal += amount;
+    });
+
+    const finalQuotePriceIncVat = retailValueIncVat - discountTotal + additionTotal;
+    const netProfit = finalQuotePriceIncVat - purchaseCostIncVat - internalExpenseTotal;
+    const profitMarginPercent = finalQuotePriceIncVat > 0 ? (netProfit / finalQuotePriceIncVat) * 100 : 0;
+
+    return {
+      purchaseCostExVat,
+      inputVat: purchaseCostIncVat - purchaseCostExVat,
+      purchaseCostIncVat,
+      
+      retailValueExVat,
+      outputVat: retailValueIncVat - retailValueExVat,
+      retailValueIncVat,
+      
+      discountTotal,
+      additionTotal,
+      internalExpenseTotal,
+      
+      finalQuotePriceIncVat,
+      netProfit,
+      profitMarginPercent,
+      
+      totalOfferUnits,
+      totalPieces
+    };
+  }, [cartItems, adjustments]);
+
+  const handlePriceChange = (productId: string, newPriceIncVat: number, vatRate: number) => {
+    const newPriceExVat = newPriceIncVat / (1 + vatRate);
+    onUpdateItem(productId, {
+      unitSellingPriceIncVat: newPriceIncVat,
+      unitSellingPriceExVat: newPriceExVat
+    });
+  };
+
+  const addAdjustment = (type: 'discount' | 'addition' | 'internal_expense') => {
+    setAdjustments([...adjustments, {
+      id: Date.now().toString(),
+      name: type === 'discount' ? 'خصم جديد' : type === 'addition' ? 'إضافة جديدة' : 'مصروف داخلي',
+      type,
+      calculationType: 'fixed',
+      value: 0,
+      calculatedAmount: 0
+    }]);
+  };
+
+  const removeAdjustment = (id: string) => {
+    setAdjustments(adjustments.filter(a => a.id !== id));
+  };
+
+  const updateAdjustment = (id: string, updates: Partial<QuoteAdjustment>) => {
+    setAdjustments(adjustments.map(a => a.id === id ? { ...a, ...updates } : a));
+  };
+
+  const handleSave = async (status: 'draft' | 'approved') => {
+    if (cartItems.length === 0) {
+      setSaveError('لا يمكن حفظ عرض فارغ');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError('');
+
+    try {
+      const quoteData = {
+        id: editingQuote?.id, // If it exists, update it
+        companyId,
+        title,
+        status,
+        customerName,
+        customerPhone,
+        validUntil,
+        items: cartItems.map(item => ({
+          ...item,
+          linePurchaseCostExVat: item.unitPurchaseCostExVat * item.quantity,
+          linePurchaseCostIncVat: item.unitPurchaseCostIncVat * item.quantity,
+          lineSellingPriceExVat: item.unitSellingPriceExVat * item.quantity,
+          lineSellingPriceIncVat: item.unitSellingPriceIncVat * item.quantity,
+        })),
+        adjustments,
+        totals
+      };
+
+      let response;
+      if (editingQuote?.id) {
+        response = await quoteService.updateQuote(quoteData);
+      } else {
+        response = await quoteService.createQuote(quoteData);
+      }
+
+      if (response.success) {
+        onSaveSuccess();
+      } else {
+        setSaveError(response.message || 'فشل حفظ العرض');
+      }
+    } catch (err: any) {
+      setSaveError(err.message || 'حدث خطأ غير متوقع');
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  if (cartItems.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+          <ShoppingCart className="w-10 h-10 text-slate-300" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-700 mb-2">العرض فارغ</h2>
+        <p className="text-slate-500 mb-6 max-w-md mx-auto">
+          لم تقم بإضافة أي وحدات عرض بعد. يرجى الذهاب إلى الكتالوج لإضافة المنتجات وبناء العرض.
+        </p>
+      </div>
+    );
+  }
+
+  const marginWarning = totals.profitMarginPercent < 5; // Example warning threshold
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      <div className="xl:col-span-2 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('quotes.quoteBuilder', 'Quote Builder')}</CardTitle>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      {/* Left Column: Items and Adjustments */}
+      <div className="lg:col-span-2 space-y-6">
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader className="bg-slate-50/50 border-b border-slate-100 flex flex-row items-center justify-between py-4">
+            <CardTitle className="text-lg font-bold text-slate-800">محتويات العرض</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => {
+              if (confirm('هل أنت متأكد من تصفير القائمة؟')) onClearCart();
+            }} className="text-rose-500 hover:text-rose-600 hover:bg-rose-50">
+              <Trash2 className="w-4 h-4 ml-1" /> تفريغ العرض
+            </Button>
           </CardHeader>
-          <CardContent>
-            {items.length === 0 ? (
-              <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                <Calculator className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                <p>{t('quotes.emptyQuote', 'No products in current quote')}</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-500 font-medium border-b">
-                    <tr>
-                      <th className="px-4 py-3">{t('common.name', 'Name')}</th>
-                      <th className="px-4 py-3 w-24">{t('quotes.quantity', 'Quantity')}</th>
-                      <th className="px-4 py-3 w-32">{t('quotes.purchaseCost', 'Purchase Cost')}</th>
-                      <th className="px-4 py-3 w-32">{t('quotes.sellingPrice', 'Selling Price')}</th>
-                      <th className="px-4 py-3 w-32 text-right">{t('quotes.total', 'Total')}</th>
-                      <th className="px-4 py-3 w-16"></th>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-right">
+                <thead className="bg-slate-50 text-slate-500 border-b">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">المنتج</th>
+                    <th className="px-4 py-3 font-medium text-center">الكمية</th>
+                    <th className="px-4 py-3 font-medium">سعر الوحدة (شامل)</th>
+                    <th className="px-4 py-3 font-medium">الإجمالي (شامل)</th>
+                    <th className="px-4 py-3 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {cartItems.map(item => (
+                    <tr key={item.productId} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-white rounded border border-slate-100 p-1 flex-shrink-0">
+                            <img src={getProductImageUrl(item.sku, item.imageUrl, item as any)} alt={item.productName} className="w-full h-full object-contain" onError={handleImageError} />
+                          </div>
+                          <div>
+                            <div className="font-semibold text-slate-800 line-clamp-1">{item.productName}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{item.sku} | <span className="font-medium text-indigo-600">{item.offerUnitName}</span></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button 
+                            onClick={() => onUpdateItem(item.productId, { quantity: Math.max(1, item.quantity - 1) })}
+                            className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-8 text-center font-bold">{item.quantity}</span>
+                          <button 
+                            onClick={() => onUpdateItem(item.productId, { quantity: item.quantity + 1 })}
+                            className="w-7 h-7 rounded-full bg-emerald-50 hover:bg-emerald-100 flex items-center justify-center text-emerald-700"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <input 
+                          type="number" 
+                          min="0" step="0.01"
+                          value={item.unitSellingPriceIncVat || ''}
+                          onChange={(e) => handlePriceChange(item.productId, parseFloat(e.target.value) || 0, item.vatRate)}
+                          className="w-24 h-8 text-left"
+                          dir="ltr"
+                        />
+                        {item.unitSellingPriceIncVat !== item.defaultUnitSellingPriceIncVat && (
+                          <div className="text-[10px] text-amber-600 mt-1 flex justify-between items-center w-24">
+                            <span>معدل</span>
+                            <button onClick={() => handlePriceChange(item.productId, item.defaultUnitSellingPriceIncVat, item.vatRate)} className="hover:underline">استعادة</button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 font-bold text-slate-800">
+                        {(item.unitSellingPriceIncVat * item.quantity).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-4">
+                        <button onClick={() => onRemoveItem(item.productId)} className="text-rose-400 hover:text-rose-600 p-2">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {items.map((item, index) => (
-                      <tr key={`${item.productId}-${index}`} className="hover:bg-slate-50/50">
-                        <td className="px-4 py-3 font-medium">{item.productName}</td>
-                        <td className="px-4 py-3">
-                          <input 
-                            type="number" 
-                            min="1" 
-                            value={item.quantity} 
-                            onChange={(e) => handleUpdateItem(index, { quantity: parseInt(e.target.value) || 1 })}
-                            className="flex h-8 w-20 rounded-md border border-slate-300 bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-slate-500">{item.unitPurchaseCostIncVat.toFixed(2)}</td>
-                        <td className="px-4 py-3">
-                          <input 
-                            type="number" 
-                            min={item.unitPurchaseCostIncVat} 
-                            value={item.unitSellingPriceIncVat} 
-                            onChange={(e) => handleUpdateItem(index, { unitSellingPriceIncVat: parseFloat(e.target.value) || 0 })}
-                            className="flex h-8 w-24 rounded-md border border-slate-300 bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold">{item.lineSellingTotalIncVat.toFixed(2)}</td>
-                        <td className="px-4 py-3">
-                          <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('common.settings', 'Settings')}</CardTitle>
+        {/* Adjustments Section */}
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4">
+            <CardTitle className="text-lg font-bold text-slate-800">التسويات الإضافية</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('quotes.quoteTitle', 'Quote Title')}</label>
+          <CardContent className="p-4 space-y-4">
+            {adjustments.map((adj) => (
+              <div key={adj.id} className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-lg">
+                <div className={`px-3 py-1 rounded text-xs font-bold ${
+                  adj.type === 'discount' ? 'bg-rose-100 text-rose-700' :
+                  adj.type === 'addition' ? 'bg-indigo-100 text-indigo-700' :
+                  'bg-amber-100 text-amber-700'
+                }`}>
+                  {adj.type === 'discount' ? 'خصم' : adj.type === 'addition' ? 'إضافة' : 'مصروف داخلي'}
+                </div>
+                
                 <input 
-                  className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  value={formData.title} 
-                  onChange={e => setFormData(f => ({...f, title: e.target.value}))} 
+                  value={adj.name} 
+                  onChange={e => updateAdjustment(adj.id, { name: e.target.value })} 
+                  className="w-40 h-9" 
+                  placeholder="وصف البند" 
                 />
+                
+                <select 
+                  className="h-9 rounded-md border border-slate-300 px-3 text-sm bg-white"
+                  value={adj.calculationType}
+                  onChange={e => updateAdjustment(adj.id, { calculationType: e.target.value as any })}
+                >
+                  <option value="fixed">مبلغ ثابت</option>
+                  <option value="percentage">نسبة %</option>
+                </select>
+                
+                <div className="relative w-24">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    {adj.calculationType === 'fixed' ? <DollarSign className="w-3 h-3" /> : <Percent className="w-3 h-3" />}
+                  </div>
+                  <input 
+                    type="number" min="0" step="0.01"
+                    value={adj.value || ''} 
+                    onChange={e => updateAdjustment(adj.id, { value: parseFloat(e.target.value) || 0 })} 
+                    className="h-9 pl-8 text-left" dir="ltr"
+                  />
+                </div>
+                
+                <div className="flex-1 text-left font-semibold text-slate-700">
+                  {adj.calculatedAmount.toFixed(2)} ر.س
+                </div>
+                
+                <button onClick={() => removeAdjustment(adj.id)} className="text-rose-400 hover:text-rose-600">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('quotes.validUntil', 'Valid Until')}</label>
-                <input 
-                  type="date" 
-                  className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  value={formData.validUntil} 
-                  onChange={e => setFormData(f => ({...f, validUntil: e.target.value}))} 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('quotes.customerName', 'Customer Name')}</label>
-                <input 
-                  className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  value={formData.customerName} 
-                  onChange={e => setFormData(f => ({...f, customerName: e.target.value}))} 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('quotes.customerPhone', 'Phone')}</label>
-                <input 
-                  className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  value={formData.customerPhone} 
-                  onChange={e => setFormData(f => ({...f, customerPhone: e.target.value}))} 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('quotes.customerEmail', 'Email')}</label>
-                <input 
-                  type="email" 
-                  className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  value={formData.customerEmail} 
-                  onChange={e => setFormData(f => ({...f, customerEmail: e.target.value}))} 
-                />
-              </div>
+            ))}
+            
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => addAdjustment('discount')} className="text-rose-600 border-rose-200 hover:bg-rose-50">
+                <Plus className="w-4 h-4 ml-1" /> إضافة خصم
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => addAdjustment('addition')} className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                <Plus className="w-4 h-4 ml-1" /> إضافة رسوم
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => addAdjustment('internal_expense')} className="text-amber-600 border-amber-200 hover:bg-amber-50">
+                <Plus className="w-4 h-4 ml-1" /> مصروف داخلي
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Right Column: Totals and Save */}
+      <div className="space-y-6">
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader className="bg-slate-50/50 border-b border-slate-100 py-4">
+            <CardTitle className="text-lg font-bold text-slate-800">بيانات العرض</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">عنوان العرض</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="مثال: عرض توريد لشركة أحمد" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{t('quotes.notes', 'Notes')}</label>
-              <textarea 
-                className="flex min-h-[80px] w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                value={formData.notes} 
-                onChange={e => setFormData(f => ({...f, notes: e.target.value}))} 
-              />
+              <label className="text-sm font-medium text-slate-700">اسم العميل</label>
+              <input value={customerName} onChange={e => setCustomerName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">رقم الجوال</label>
+              <input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} dir="ltr" className="text-right" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">صالح حتى</label>
+              <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} />
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <div className="space-y-6">
-        <Card className="sticky top-6">
-          <CardHeader className="bg-slate-50 border-b">
-            <CardTitle>{t('quotes.summary', 'Financial Summary')}</CardTitle>
+        <Card className="shadow-lg border-emerald-100 relative overflow-hidden">
+          <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
+          <CardHeader className="py-4 pb-2">
+            <CardTitle className="text-lg font-bold text-slate-800">الفاتورة النهائية للعرض</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">{t('quotes.purchaseCost', 'Purchase Cost')}</span>
-              <span className="font-medium">{totals.purchaseCostIncVat.toFixed(2)}</span>
+          <CardContent className="p-4 space-y-4">
+            
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-2 text-sm">
+              <div className="flex justify-between text-slate-600">
+                <span>وحدات العرض</span>
+                <span className="font-semibold text-slate-800">{totals.totalOfferUnits} وحدة</span>
+              </div>
+              {totals.totalPieces > 0 && (
+                <div className="flex justify-between text-slate-500 text-xs">
+                  <span>القطع الداخلية المتاحة للحساب</span>
+                  <span>{totals.totalPieces} قطعة</span>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">{t('quotes.subtotal', 'Subtotal')}</span>
-              <span className="font-medium">{totals.sellingSubtotalExVat.toFixed(2)}</span>
+
+            <div className="space-y-2 text-sm border-b border-slate-100 pb-3">
+              <div className="flex justify-between text-slate-600">
+                <span>قيمة السلع (بدون ضريبة)</span>
+                <span>{totals.retailValueExVat.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>ضريبة المبيعات</span>
+                <span>{totals.outputVat.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-slate-800 pt-1">
+                <span>إجمالي السلع (شامل)</span>
+                <span>{totals.retailValueIncVat.toFixed(2)}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">{t('quotes.vat', 'VAT (15%)')}</span>
-              <span className="font-medium">{totals.vatAmount.toFixed(2)}</span>
+
+            <div className="space-y-2 text-sm border-b border-slate-100 pb-3">
+              {totals.discountTotal > 0 && (
+                <div className="flex justify-between text-rose-600">
+                  <span>إجمالي الخصومات (-)</span>
+                  <span>{totals.discountTotal.toFixed(2)}</span>
+                </div>
+              )}
+              {totals.additionTotal > 0 && (
+                <div className="flex justify-between text-indigo-600">
+                  <span>إجمالي الإضافات (+)</span>
+                  <span>{totals.additionTotal.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
+              <div className="flex justify-between items-end mb-1">
+                <span className="text-base font-bold text-slate-900">القيمة النهائية للعميل</span>
+                <div className="text-2xl font-bold text-emerald-600">
+                  {totals.finalQuotePriceIncVat.toFixed(2)} <span className="text-sm font-normal text-slate-500">ر.س</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={`mt-4 p-3 rounded-lg border ${marginWarning ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-100'}`}>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="font-medium text-slate-700">صافي الربح المتوقع</span>
+                <span className={`font-bold ${totals.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  {totals.netProfit.toFixed(2)} ر.س
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">هامش الربح</span>
+                <span className={`font-bold ${marginWarning ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {totals.profitMarginPercent.toFixed(1)}%
+                </span>
+              </div>
+              {marginWarning && (
+                <div className="text-[10px] text-amber-700 mt-2 bg-amber-100/50 p-1.5 rounded">
+                  تحذير: هامش الربح منخفض، قد يتطلب العرض موافقة الإدارة.
+                </div>
+              )}
+            </div>
+
+            {saveError && (
+              <div className="text-sm text-rose-600 bg-rose-50 p-3 rounded-lg border border-rose-100">
+                {saveError}
+              </div>
+            )}
+
+            <div className="pt-4 grid grid-cols-2 gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => handleSave('draft')}
+                disabled={isSaving}
+                className="w-full text-slate-700 hover:bg-slate-50"
+              >
+                {isSaving ? 'جاري الحفظ...' : 'حفظ كمسودة'}
+              </Button>
+              <Button 
+                onClick={() => handleSave('approved')}
+                disabled={isSaving}
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                {isSaving ? 'جاري الاعتماد...' : 'اعتماد العرض'}
+              </Button>
             </div>
             
-            <div className="pt-4 border-t flex justify-between font-bold text-lg">
-              <span>{t('quotes.finalPrice', 'Final Price')}</span>
-              <span className="text-indigo-600">{totals.customerFinalPrice.toFixed(2)}</span>
-            </div>
-
-            <div className="pt-4 mt-4 border-t space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">{t('quotes.profit', 'Profit Amount')}</span>
-                <span className="font-bold text-emerald-600">{totals.profitAmount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">{t('quotes.margin', 'Profit Margin')}</span>
-                <span className="font-bold text-emerald-600">{totals.profitMarginPercent.toFixed(1)}%</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">{t('quotes.markup', 'Markup')}</span>
-                <span className="font-bold text-emerald-600">{totals.markupPercent.toFixed(1)}%</span>
-              </div>
-            </div>
-
-            <Button 
-              className="w-full mt-6 h-12 text-lg font-semibold" 
-              onClick={handleSave}
-              disabled={items.length === 0}
-            >
-              {t('quotes.saveQuote', 'Save Quote')}
-            </Button>
           </CardContent>
         </Card>
       </div>
+
     </div>
   );
 }

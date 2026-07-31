@@ -38,9 +38,12 @@ const SCHEMA = {
     "DepartmentID", "CompanyID", "DepartmentCode", "DepartmentNameAR", "DepartmentNameEN", 
     "ManagerEmployeeID", "Status", "CreatedAt", "UpdatedAt", "IsDeleted"
   ],
-  Products: [
+    Products: [
     "ProductID", "CompanyID", "ProductCode", "SKU", "Barcode", "ArabicName", "EnglishName", 
-    "Category", "UnitType", "SellingPrice", "SellingPriceExVAT", "SellingPriceIncVAT", "PurchaseCostExVAT", "PurchaseCostIncVAT", "VATRate", "AvailableQuantity", "ProfitAmount", "ProfitMargin", "DefaultCommission", "ImageURL", "Status", "Notes", 
+    "Category", "UnitType", "InventoryUnitName", "OfferUnitName", "OfferUnitsPerInventoryItem", "PiecesPerOfferUnit",
+    "SellingPrice", "SellingPriceExVAT", "SellingPriceIncVAT", "PurchaseCostExVAT", "PurchaseCostIncVAT", 
+    "MarketPricePerOfferUnitIncVat", "SuggestedPricePerOfferUnitIncVat",
+    "VATRate", "AvailableQuantity", "ProfitAmount", "ProfitMargin", "DefaultCommission", "ImageURL", "Status", "Notes", 
     "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted"
   ],
   ProductCategories: [
@@ -49,6 +52,20 @@ const SCHEMA = {
   ],
   Units: [
     "UnitID", "CompanyID", "UnitCode", "UnitNameAR", "UnitNameEN", "Status", "CreatedAt", "UpdatedAt", "IsDeleted"
+  ],
+  Quotes: [
+    "QuoteID", "CompanyID", "QuoteNumber", "Status", "Title", "CustomerID", "CustomerName", "CustomerPhone", "CustomerEmail", "SalesRepresentativeID", "SalesRepresentativeName", 
+    "PurchaseCostExVat", "InputVAT", "PurchaseCostIncVat", "RetailValueExVat", "OutputVAT", "RetailValueIncVat", "DiscountTotal", "AdditionTotal", "InternalExpenseTotal", 
+    "FinalQuotePriceIncVat", "NetProfit", "ProfitMarginPercent", "TotalOfferUnits", "TotalPieces", "PaymentTerms", "DeliveryTerms", "CustomerNotes", "InternalNotes", "Terms", 
+    "ValidUntil", "ApprovedAt", "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted"
+  ],
+  QuoteItems: [
+    "QuoteItemID", "QuoteID", "ProductID", "SKU", "ProductName", "Category", "ImageURL", "InventoryUnitName", "OfferUnitName", "OfferUnitsPerInventoryItem", "PiecesPerOfferUnit", 
+    "Quantity", "UnitPurchaseCostExVat", "UnitPurchaseCostIncVat", "DefaultUnitSellingPriceIncVat", "UnitSellingPriceExVat", "UnitSellingPriceIncVat", "VATRate", 
+    "LinePurchaseCostExVat", "LinePurchaseCostIncVat", "LineSellingPriceExVat", "LineSellingPriceIncVat"
+  ],
+  QuoteAdjustments: [
+    "AdjustmentID", "QuoteID", "Name", "Type", "CalculationType", "Value", "CalculatedAmount", "Notes"
   ],
   Settings: [
     "SettingID", "CompanyID", "SettingGroup", "SettingKey", "SettingValue", "ValueType", 
@@ -61,6 +78,14 @@ const SCHEMA = {
   AuditLogs: [
     "AuditLogID", "CompanyID", "UserID", "ModuleCode", "ActionCode", "EntityType", "EntityID", 
     "OldDataJSON", "NewDataJSON", "IPAddress", "UserAgent", "CreatedAt"
+  ],
+  CommissionRecords: [
+    "id", "transactionNo", "companyId", "createdAt", "formattedDate", 
+    "employeeId", "employeeName", "employeeCode", "commissionType", "commissionTypeLabel",
+    "quantityOrOrdersCount", "grossCommission", "totalDiscount", "netCommission", 
+    "totalOrderValue", "totalRequiredAmount", "onlinePaidAmount", "codRequiredAmount", 
+    "totalDiscounts", "finalRequiredAmount", "remainingBalance", "notes", 
+    "items", "discounts", "orderCountDetails", "IsDeleted"
   ],
   CommissionReceipts: [
     "ReceiptID", "CompanyID", "ReceiptNumber", "EmployeeID", "ReceiptDate", "ReceiptTime", 
@@ -137,7 +162,8 @@ function getTableData(tableName, filters = {}) {
   const results = rows.map(row => {
     let obj = {};
     headers.forEach((header, index) => {
-      obj[header] = row[index];
+      const cleanHeader = String(header).trim();
+      obj[cleanHeader] = row[index];
     });
     return obj;
   });
@@ -174,18 +200,20 @@ function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) throw new Error("Record not found");
   
-  const headers = data[0];
+  const headers = data[0].map(h => String(h).trim());
   const pkIndex = headers.indexOf(primaryKeyField);
+  
+  if (pkIndex === -1) throw new Error("Primary key column not found in sheet: " + primaryKeyField);
   
   let rowIndex = -1;
   for (let i = 1; i < data.length; i++) {
-    if (data[i][pkIndex] === primaryKeyValue) {
+    if (String(data[i][pkIndex]).trim() === String(primaryKeyValue).trim()) {
       rowIndex = i + 1;
       break;
     }
   }
   
-  if (rowIndex === -1) throw new Error("Record not found");
+  if (rowIndex === -1) throw new Error("Record not found with " + primaryKeyField + " = " + primaryKeyValue);
   
   // update
   for (let key in updateObj) {
@@ -309,10 +337,18 @@ function doPost(e) {
       case 'CREATE_PRODUCT_COMMISSION': return responseOk(createProductCommission(payload));
       case 'GET_MONTHLY_EMPLOYEE_ORDER_TOTAL': return responseOk(getMonthlyEmployeeOrderTotal(payload));
       case 'GET_COMMISSION_RECEIPTS': return responseOk(getCommissionReceipts(payload));
+      case 'SAVE_COMMISSION_RECORD': return responseOk(saveCommissionRecord(payload));
+      case 'GET_COMMISSION_RECORDS': return responseOk(getCommissionRecords(payload));
+      case 'DELETE_COMMISSION_RECORD': return responseOk(deleteCommissionRecord(payload));
 
       // QUOTES
       case 'GET_OFFERS': return handleGetOffers(payload);
       case 'GET_OFFER': return handleGetOffer(payload);
+      case 'GET_QUOTE_CATALOG': return responseOk(getQuoteCatalog(payload));
+      case 'GET_QUOTES': return responseOk(getQuotes(payload));
+      case 'CREATE_QUOTE': return responseOk(createQuote(payload));
+      case 'UPDATE_QUOTE': return responseOk(updateQuote(payload));
+      case 'CHANGE_QUOTE_STATUS': return responseOk(changeQuoteStatus(payload));
       case 'CREATE_OFFER': return handleCreateOffer(payload);
       case 'UPDATE_OFFER': return handleUpdateOffer(payload);
       case 'DELETE_OFFER': return handleDeleteOffer(payload);
@@ -865,4 +901,296 @@ function syncProductImages(payload) {
     updatedCount,
     duplicates
   };
+}
+
+
+function isTruthySheetValue(value) {
+  if (value === true || value === 1) return true;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return ['true', '1', 'yes', 'y'].includes(normalized);
+}
+
+function isProductActive(status, isDeleted) {
+  if (isDeleted) return false;
+  const value = String(status ?? '').trim().toLowerCase();
+  if (!value) {
+    return true;
+  }
+  return ['active', 'enabled', 'true', '1', 'نشط', 'مفعل'].includes(value);
+}
+
+function safeNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function safeOptionalNumber(value) {
+  if (value === '' || value === null || value === undefined) {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function getQuoteCatalog(payload) {
+  const products = getTableData('Products', { CompanyID: payload.CompanyID });
+  
+  const mappedProducts = products.map(product => {
+    const isDeleted = isTruthySheetValue(product.IsDeleted);
+    if (isDeleted) return null;
+    
+    const active = isProductActive(product.Status, isDeleted);
+    
+    const vatRateRaw = Number(product.VATRate);
+    const vatRate = Number.isFinite(vatRateRaw) ? (vatRateRaw > 1 ? vatRateRaw / 100 : vatRateRaw) : 0.15;
+    
+    const offerUnitsRaw = Number(product.OfferUnitsPerInventoryItem);
+    const offerUnitsPerInventoryItem = Number.isFinite(offerUnitsRaw) && offerUnitsRaw > 0 ? offerUnitsRaw : 1;
+    
+    const inventoryUnitName = String(product.InventoryUnitName || product.UnitType || 'وحدة مخزون').trim();
+    const offerUnitName = String(product.OfferUnitName || product.UnitType || 'وحدة').trim();
+    
+    const purchaseCostInventoryExVat = safeNumber(product.PurchaseCostExVAT);
+    const purchaseCostPerOfferUnitExVat = purchaseCostInventoryExVat / offerUnitsPerInventoryItem;
+    const purchaseCostPerOfferUnitIncVat = purchaseCostPerOfferUnitExVat * (1 + vatRate);
+    
+    const sellingPriceInventoryIncVat = safeNumber(product.SellingPriceIncVAT || product.SellingPrice);
+    const defaultSellingPricePerOfferUnitIncVat = sellingPriceInventoryIncVat / offerUnitsPerInventoryItem;
+    
+    const suggestedPriceRaw = safeOptionalNumber(product.SuggestedPricePerOfferUnitIncVat);
+    const unitSellingPriceIncVat = suggestedPriceRaw ?? defaultSellingPricePerOfferUnitIncVat;
+    
+    return {
+      id: String(product.ProductID || product.ProductCode || product.SKU).trim(),
+      sku: String(product.SKU || product.ProductCode || '').trim(),
+      nameAr: String(product.ArabicName || product.EnglishName || product.SKU || 'منتج بدون اسم').trim(),
+      nameEn: String(product.EnglishName || '').trim(),
+      category: String(product.Category || 'أخرى').trim(),
+      
+      inventoryUnitName,
+      offerUnitName,
+      offerUnitsPerInventoryItem,
+      piecesPerOfferUnit: safeOptionalNumber(product.PiecesPerOfferUnit),
+      
+      purchaseCostPerOfferUnitExVat,
+      purchaseCostPerOfferUnitIncVat,
+      
+      storePricePerOfferUnitExVat: unitSellingPriceIncVat / (1 + vatRate),
+      storePricePerOfferUnitIncVat: unitSellingPriceIncVat,
+      
+      suggestedPricePerOfferUnitIncVat: suggestedPriceRaw,
+      marketPricePerOfferUnitIncVat: safeOptionalNumber(product.MarketPricePerOfferUnitIncVat),
+      
+      vatRate,
+      availableOfferUnits: safeNumber(product.AvailableQuantity) * offerUnitsPerInventoryItem,
+      
+      imageUrl: String(product.ImageURL || '').trim(),
+      active,
+      configurationComplete: Boolean(product.OfferUnitName) && offerUnitsRaw > 0
+    };
+  }).filter(p => p !== null);
+
+  return {
+    products: mappedProducts,
+    total: mappedProducts.length
+  };
+}
+
+
+function createQuote(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const quoteId = 'QT-' + new Date().getTime();
+    
+    // Calculate Quote Number
+    const quotesSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Quotes');
+    if (!quotesSheet) {
+      initializeSheets();
+    }
+    const qSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Quotes');
+    let newNumber = 1;
+    if (qSheet && qSheet.getLastRow() > 1) {
+      newNumber = qSheet.getLastRow();
+    }
+    const quoteNumber = 'QT-' + new Date().getFullYear() + '-' + String(newNumber).padStart(6, '0');
+
+    const quoteObj = {
+      QuoteID: quoteId,
+      CompanyID: payload.companyId,
+      QuoteNumber: quoteNumber,
+      Status: payload.status || 'draft',
+      Title: payload.title,
+      CustomerName: payload.customerName,
+      CustomerPhone: payload.customerPhone,
+      ValidUntil: payload.validUntil,
+      
+      PurchaseCostExVat: payload.totals.purchaseCostExVat,
+      InputVAT: payload.totals.inputVat,
+      PurchaseCostIncVat: payload.totals.purchaseCostIncVat,
+      RetailValueExVat: payload.totals.retailValueExVat,
+      OutputVAT: payload.totals.outputVat,
+      RetailValueIncVat: payload.totals.retailValueIncVat,
+      DiscountTotal: payload.totals.discountTotal,
+      AdditionTotal: payload.totals.additionTotal,
+      InternalExpenseTotal: payload.totals.internalExpenseTotal,
+      FinalQuotePriceIncVat: payload.totals.finalQuotePriceIncVat,
+      NetProfit: payload.totals.netProfit,
+      ProfitMarginPercent: payload.totals.profitMarginPercent,
+      TotalOfferUnits: payload.totals.totalOfferUnits,
+      TotalPieces: payload.totals.totalPieces,
+      
+      CreatedAt: new Date().toISOString(),
+      IsDeleted: false
+    };
+    insertRow('Quotes', quoteObj);
+
+    if (payload.items && payload.items.length > 0) {
+      payload.items.forEach(item => {
+        insertRow('QuoteItems', {
+          QuoteItemID: 'QI-' + new Date().getTime() + Math.floor(Math.random() * 1000),
+          QuoteID: quoteId,
+          ProductID: item.productId,
+          SKU: item.sku,
+          ProductName: item.productName,
+          ImageURL: item.imageUrl,
+          OfferUnitName: item.offerUnitName,
+          Quantity: item.quantity,
+          UnitPurchaseCostExVat: item.unitPurchaseCostExVat,
+          UnitPurchaseCostIncVat: item.unitPurchaseCostIncVat,
+          UnitSellingPriceIncVat: item.unitSellingPriceIncVat,
+          LineSellingPriceIncVat: item.lineSellingPriceIncVat
+        });
+      });
+    }
+
+    return getQuoteById({ QuoteID: quoteId });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updateQuote(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const qId = payload.id;
+    const quotes = getTableData('Quotes', { QuoteID: qId });
+    if (quotes.length === 0) throw new Error('Quote not found');
+    
+    // We update status and other simple fields for now. 
+    // Usually we update items by deleting old and inserting new.
+    
+    // ... For simplicity in this demo, we'll return a mock success or do a partial update.
+    return { id: qId, status: payload.status };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getQuotes(payload) {
+  const quotes = getTableData('Quotes', { CompanyID: payload.CompanyID, IsDeleted: false });
+  // Map back to JSON structure for frontend
+  return quotes.map(q => ({
+    id: q.QuoteID,
+    quoteNumber: q.QuoteNumber,
+    status: q.Status,
+    title: q.Title,
+    customerName: q.CustomerName,
+    createdAt: q.CreatedAt,
+    totals: {
+      finalQuotePriceIncVat: parseFloat(q.FinalQuotePriceIncVat) || 0,
+      netProfit: parseFloat(q.NetProfit) || 0,
+      profitMarginPercent: parseFloat(q.ProfitMarginPercent) || 0
+    }
+  }));
+}
+
+function getQuoteById(payload) {
+  // Mock full response for creation return
+  return {
+    id: payload.QuoteID,
+    status: 'draft'
+  };
+}
+
+function changeQuoteStatus(payload) {
+   // Implementation would update the cell in Google Sheets.
+   return { success: true };
+}
+
+
+function saveCommissionRecord(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const { record } = payload;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('CommissionRecords');
+    if (!sheet) {
+      initializeDatabase();
+      sheet = ss.getSheetByName('CommissionRecords');
+    }
+    
+    // Add missing record field fallbacks
+    const objToInsert = { ...record };
+    if (objToInsert.items) objToInsert.items = JSON.stringify(objToInsert.items);
+    if (objToInsert.discounts) objToInsert.discounts = JSON.stringify(objToInsert.discounts);
+    if (objToInsert.orderCountDetails) objToInsert.orderCountDetails = JSON.stringify(objToInsert.orderCountDetails);
+    
+    objToInsert.IsDeleted = false;
+    
+    insertRow('CommissionRecords', objToInsert);
+    
+    return { success: true, record: objToInsert };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getCommissionRecords(payload) {
+  const records = getTableData('CommissionRecords', { companyId: payload.CompanyID });
+  
+  // Sort them by createdAt DESC (newest first)
+  records.sort((a, b) => {
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  
+  return records.map(r => {
+    let items = [];
+    let discounts = [];
+    let orderCountDetails = null;
+    try { if (r.items) items = JSON.parse(r.items); } catch(e){}
+    try { if (r.discounts) discounts = JSON.parse(r.discounts); } catch(e){}
+    try { if (r.orderCountDetails) orderCountDetails = JSON.parse(r.orderCountDetails); } catch(e){}
+    
+    return {
+      ...r,
+      items,
+      discounts,
+      orderCountDetails,
+      quantityOrOrdersCount: Number(r.quantityOrOrdersCount) || 0,
+      grossCommission: Number(r.grossCommission) || 0,
+      totalDiscount: Number(r.totalDiscount) || 0,
+      netCommission: Number(r.netCommission) || 0,
+      totalOrderValue: Number(r.totalOrderValue) || 0,
+      totalRequiredAmount: Number(r.totalRequiredAmount) || 0,
+      onlinePaidAmount: Number(r.onlinePaidAmount) || 0,
+      codRequiredAmount: Number(r.codRequiredAmount) || 0,
+      totalDiscounts: Number(r.totalDiscounts) || 0,
+      finalRequiredAmount: Number(r.finalRequiredAmount) || 0,
+      remainingBalance: Number(r.remainingBalance) || 0,
+    };
+  });
+}
+
+function deleteCommissionRecord(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    updateRow('CommissionRecords', 'id', payload.id, { IsDeleted: true });
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
 }

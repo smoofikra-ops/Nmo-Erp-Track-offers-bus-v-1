@@ -24,5 +24,17 @@ export const commissionService = {
 
   getCommissionReceipts: (companyId: string): Promise<ApiResponse<any>> => {
     return ApiClient.post('GET_COMMISSION_RECEIPTS', { CompanyID: companyId });
+  },
+
+  getCommissionRecords: (companyId: string): Promise<ApiResponse<any>> => {
+    return ApiClient.post('GET_COMMISSION_RECORDS', { CompanyID: companyId });
+  },
+
+  saveCommissionRecord: (record: any): Promise<ApiResponse<any>> => {
+    return ApiClient.post('SAVE_COMMISSION_RECORD', { record });
+  },
+
+  deleteCommissionRecord: (id: string): Promise<ApiResponse<any>> => {
+    return ApiClient.post('DELETE_COMMISSION_RECORD', { id });
   }
 };

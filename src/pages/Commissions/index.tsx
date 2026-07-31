@@ -34,9 +34,19 @@ export function CommissionsHub() {
 
   const primaryCards = [
     {
+      id: 'products',
+      title: 'عمولة المنتجات',
+      description: 'إدخال عدد المنتجات، احتساب العمولة، البيانات المالية المترتبة، والنتيجة النهائية.',
+      icon: Package,
+      path: '/commission/products',
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50',
+      border: 'border-emerald-100 hover:border-emerald-300'
+    },
+    {
       id: 'order-count',
-      title: t('commissions.orderCount', 'Order Count Commission'),
-      description: t('commissions.orderCountDesc', 'Calculate commission based on monthly orders and tiers.'),
+      title: 'عمولة عدد الطلبات',
+      description: 'احتساب العمولة بناءً على عدد الطلبات الشهرية وتطبيق الشرائح.',
       icon: Calculator,
       path: '/commission/order-count',
       color: 'text-indigo-600',
@@ -44,19 +54,19 @@ export function CommissionsHub() {
       border: 'border-indigo-100 hover:border-indigo-300'
     },
     {
-      id: 'products',
-      title: t('commissions.products', 'Product Commission'),
-      description: t('commissions.productsDesc', 'Calculate commission based on sold products and quantities.'),
-      icon: Package,
-      path: '/commission/products',
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
-      border: 'border-emerald-100 hover:border-emerald-300'
+      id: 'records',
+      title: 'سجل العمولات الدائم',
+      description: 'عرض السجل الدائم للعموليات، البحث والتصفية، وطباعة ملخص A4.',
+      icon: History,
+      path: '/commission/records',
+      color: 'text-amber-600',
+      bg: 'bg-amber-50',
+      border: 'border-amber-100 hover:border-amber-300'
     }
   ];
 
   const shortcuts = [
-    { title: t('commissions.history', 'History'), icon: History, path: '/commission/history' },
+    { title: 'سجل العمولات', icon: History, path: '/commission/records' },
     { title: t('commissions.closings', 'Daily Closings'), icon: FileText, path: '/commission/closings' },
     { title: t('commissions.reports', 'Reports'), icon: BarChart, path: '/commission/reports' },
     { title: t('employees.list', 'Employees'), icon: Users, path: '/hr' },
@@ -103,7 +113,7 @@ export function CommissionsHub() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {primaryCards.map(card => (
           <Card 
             key={card.id} 

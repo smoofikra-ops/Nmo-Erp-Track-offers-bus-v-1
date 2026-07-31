@@ -1,131 +1,161 @@
-export enum ProductCategory {
-  Tissues = 'tissues',
-  Rolls = 'rolls',
-  TrashBags = 'trash_bags',
-  Detergents = 'detergents',
-  Cups = 'cups',
-  Others = 'others',
-}
+export type QuoteStatus =
+  | 'draft'
+  | 'approved'
+  | 'sent'
+  | 'accepted'
+  | 'rejected'
+  | 'expired'
+  | 'cancelled';
 
-export enum ProductUnitType {
-  Bundle = 'bundle',
-  Carton = 'carton',
-  Roll = 'roll',
-  Piece = 'piece',
-  Pack = 'pack',
-}
-
-export enum AdjustmentType {
-  Discount = 'discount',
-  Expense = 'expense',
-}
-
-export enum OfferStatus {
-  Draft = 'draft',
-  Approved = 'approved',
-  Cancelled = 'cancelled',
-  Converted = 'converted',
-}
-
-export interface QuoteProduct {
+export interface QuoteCatalogProduct {
   id: string;
-  companyId: string;
   sku: string;
   nameAr: string;
   nameEn?: string;
-  category: ProductCategory;
-  unitType: ProductUnitType;
-  unitsPerItem: number;
+  category: string;
+
+  inventoryUnitName: string;
+  offerUnitName: string;
+
+  offerUnitsPerInventoryItem: number;
+  piecesPerOfferUnit?: number;
+
+  purchaseCostPerOfferUnitExVat: number;
+  purchaseCostPerOfferUnitIncVat: number;
+
+  storePricePerOfferUnitExVat: number;
+  storePricePerOfferUnitIncVat: number;
+
+  suggestedPricePerOfferUnitExVat?: number;
+  suggestedPricePerOfferUnitIncVat?: number;
+
+  marketPricePerOfferUnitIncVat?: number;
 
   vatRate: number;
-
-  purchaseCostExVat: number;
-  purchaseCostIncVat: number;
-
-  storePrice: number;
-  marketPrice: number;
-  suggestedPrice: number;
-
-  availableQuantity: number;
+  availableOfferUnits?: number;
 
   imageUrl?: string;
   active: boolean;
-  isDeleted: boolean;
-
-  createdAt: string;
-  updatedAt: string;
+  configurationComplete?: boolean;
 }
 
-export interface OfferItem {
-  id: string;
-  offerId: string;
+export interface QuoteCartItem {
   productId: string;
-
   sku: string;
   productName: string;
-  unitType: ProductUnitType;
+  imageUrl?: string;
+
+  offerUnitName: string;
+  piecesPerOfferUnit?: number;
 
   quantity: number;
 
-  vatRate: number;
   unitPurchaseCostExVat: number;
   unitPurchaseCostIncVat: number;
+
   unitSellingPriceExVat: number;
   unitSellingPriceIncVat: number;
 
-  linePurchaseTotalIncVat: number;
-  lineSellingSubtotalExVat: number;
-  lineVatAmount: number;
-  lineSellingTotalIncVat: number;
+  defaultUnitSellingPriceIncVat: number;
+  marketPricePerOfferUnitIncVat?: number;
+
+  vatRate: number;
+  availableOfferUnits?: number;
 }
 
-export interface OfferAdjustment {
+export interface QuoteItemSnapshot {
   id: string;
-  offerId: string;
+  quoteId: string;
+
+  productId: string;
+  sku: string;
+  productName: string;
+  category?: string;
+  imageUrl?: string;
+
+  inventoryUnitName?: string;
+  offerUnitName: string;
+  offerUnitsPerInventoryItem?: number;
+  piecesPerOfferUnit?: number;
+
+  quantity: number;
+
+  unitPurchaseCostExVat: number;
+  unitPurchaseCostIncVat: number;
+
+  defaultUnitSellingPriceIncVat: number;
+  unitSellingPriceExVat: number;
+  unitSellingPriceIncVat: number;
+
+  vatRate: number;
+
+  linePurchaseCostExVat: number;
+  linePurchaseCostIncVat: number;
+
+  lineSellingPriceExVat: number;
+  lineSellingPriceIncVat: number;
+}
+
+export interface QuoteAdjustment {
+  id: string;
   name: string;
-  type: AdjustmentType;
+  type: 'discount' | 'addition' | 'internal_expense';
+  calculationType: 'fixed' | 'percentage';
   value: number;
+  calculatedAmount: number;
+  notes?: string;
 }
 
-export interface OfferTotals {
-  purchaseCostIncVat: number;
-
-  sellingSubtotalExVat: number;
-  vatAmount: number;
-  sellingTotalIncVat: number;
-
-  discountsTotal: number;
-  expensesTotal: number;
-
-  customerFinalPrice: number;
-  profitAmount: number;
-  profitMarginPercent: number;
-  markupPercent: number;
-
-  totalQuantity: number;
-}
-
-export interface QuoteOffer {
+export interface Quote {
   id: string;
-  companyId: string;
-  offerNumber: string;
+  quoteNumber: string;
+  status: QuoteStatus;
+
   title: string;
 
+  customerId?: string;
   customerName?: string;
   customerPhone?: string;
   customerEmail?: string;
-  customerAddress?: string;
 
-  status: OfferStatus;
-
-  items: OfferItem[];
-  adjustments: OfferAdjustment[];
-  totals: OfferTotals;
-
-  notes?: string;
-  terms?: string;
-  validUntil?: string;
+  salesRepresentativeId?: string;
+  salesRepresentativeName?: string;
 
   createdAt: string;
   updatedAt: string;
+  validUntil?: string;
+  approvedAt?: string;
+
+  items: QuoteItemSnapshot[];
+  adjustments: QuoteAdjustment[];
+
+  totals: {
+    purchaseCostExVat: number;
+    inputVat: number;
+    purchaseCostIncVat: number;
+
+    retailValueExVat: number;
+    outputVat: number;
+    retailValueIncVat: number;
+
+    discountTotal: number;
+    additionTotal: number;
+    internalExpenseTotal: number;
+
+    finalQuotePriceIncVat: number;
+    netProfit: number;
+    profitMarginPercent: number;
+
+    totalOfferUnits: number;
+    totalPieces: number;
+  };
+
+  paymentTerms?: string;
+  deliveryTerms?: string;
+  customerNotes?: string;
+  internalNotes?: string;
+  terms?: string;
+
+  createdBy?: string;
+  updatedBy?: string;
 }

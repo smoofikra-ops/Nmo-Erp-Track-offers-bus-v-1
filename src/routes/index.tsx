@@ -10,6 +10,7 @@ import { CommissionsHub } from '@/pages/Commissions';
 import { OrderCountCommission } from '@/pages/Commissions/OrderCountCommission';
 import { ProductCommission } from '@/pages/Commissions/ProductCommission';
 import { CommissionHistory } from '@/pages/Commissions/History';
+import { CommissionRecords } from '@/pages/Commissions/CommissionRecords';
 import { DailyClosings } from '@/pages/Commissions/Closings';
 import { CommissionReports } from '@/pages/Commissions/Reports';
 import { Employees } from '@/pages/Employees';
@@ -55,7 +56,11 @@ const router = createBrowserRouter([
           },
           {
             path: 'commission/history',
-            element: <CommissionHistory />,
+            element: <CommissionRecords />,
+          },
+          {
+            path: 'commission/records',
+            element: <CommissionRecords />,
           },
           {
             path: 'commission/closings',

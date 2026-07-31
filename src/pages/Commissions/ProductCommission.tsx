@@ -1,503 +1,524 @@
 import { useAuth } from "@/contexts/AuthContext";
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Package, Save, ArrowLeft, Printer, FileText, CheckCircle2, AlertCircle, Plus, Minus, Tag, Trash2, ShieldCheck, CreditCard, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/utils/cn';
 import { employeeService } from '@/services/employeeService';
 import { productService } from '@/services/productService';
 import { commissionService } from '@/services/commissionService';
-import { Search, Plus, Trash2, CheckCircle, Package, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
-import { cn } from '@/utils/cn';
-// @ts-ignore
-import { getProductImageUrl, handleImageError } from '@/utils/imageUtils';
+import { CommissionRecord, AppliedDiscount } from '@/types';
+import { getProductImageUrl } from '@/utils/imageUtils';
+import { PrintableCommissionSummary } from '@/components/commissions/PrintableCommissionSummary';
 
 export function ProductCommission() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
 
+  // Step 1: Input, Step 2: Summary
+  const [step, setStep] = useState<number>(1);
+
+  // Queries
   const { data: empRes, isLoading: empLoading } = useQuery({
     queryKey: ['employees', companyId],
     queryFn: () => employeeService.getEmployees(companyId),
     enabled: Boolean(companyId),
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
-    retry: 1
   });
 
   const { data: prodRes, isLoading: prodLoading } = useQuery({
     queryKey: ['products', companyId],
     queryFn: () => productService.getProducts(companyId),
     enabled: Boolean(companyId),
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
-    retry: 1
   });
 
-  const employees = (empRes?.data || []).filter(e => e.Status === 'ACTIVE');
-  const products = (prodRes?.data || []).filter(p => p.Status === 'ACTIVE');
+  const employees = (empRes?.data || []).filter((e) => e.Status === 'ACTIVE');
+  const products = (prodRes?.data || []).filter((p) => p.Status === 'ACTIVE');
 
-  if ((import.meta as any).env.DEV) {
-    console.log("ProductCommission - All Employees from API:", empRes?.data);
-    console.log("ProductCommission - Filtered Active Employees:", employees);
-  }
-
-  // Step 1: Employee
+  // Form State
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
-  const selectedEmployee = employees.find(e => e.EmployeeID === selectedEmployeeId) || null;
+  const selectedEmployee = employees.find((e) => e.EmployeeID === selectedEmployeeId) || null;
 
-  // Step 2: Products
-  const [search, setSearch] = useState('');
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   
-  // Step 3: Discounts
-  const [discounts, setDiscounts] = useState<{id: string, name: string, amount: number}[]>([]);
-  
-  // Step 4: Closing
-  const [requiredAmount, setRequiredAmount] = useState<number>(0);
-  const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [totalRequiredAmount, setTotalRequiredAmount] = useState<number | ''>('');
+  const [onlinePaidAmount, setOnlinePaidAmount] = useState<number | ''>('');
+  const [discounts, setDiscounts] = useState<AppliedDiscount[]>([]);
   const [notes, setNotes] = useState('');
   
-  // Step 5: Review confirmation
-  const [confirmed, setConfirmed] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+  const [activeRecordForPrint, setActiveRecordForPrint] = useState<CommissionRecord | null>(null);
+  const [showSavedSuccessModal, setShowSavedSuccessModal] = useState(false);
+  const [savedRecord, setSavedRecord] = useState<CommissionRecord | null>(null);
 
-  const activeProducts = products.filter(p => quantities[p.ProductID] > 0);
-  const grossCommission = activeProducts.reduce((sum, p) => sum + (quantities[p.ProductID] * p.DefaultCommission), 0);
-  const discountTotal = discounts.reduce((sum, d) => sum + d.amount, 0);
-  const netCommission = Math.max(0, grossCommission - discountTotal);
-  const balance = (paidAmount + netCommission) - requiredAmount;
+  // Calculations
+  const activeProducts = products.filter((p) => (quantities[p.ProductID] || 0) > 0);
+  const totalProductsCount = activeProducts.reduce((sum, p) => sum + (quantities[p.ProductID] || 0), 0);
+  
+  const grossCommission = activeProducts.reduce(
+    (sum, p) => sum + (quantities[p.ProductID] || 0) * (Number(p.DefaultCommission) || 0),
+    0
+  );
 
-  const saveMutation = useMutation({
-    mutationFn: (payload: any) => commissionService.createProductCommission(payload),
-    onSuccess: (res) => {
-      if (res.success) {
-        alert(t('commissions.saveSuccess', 'Commission saved successfully! Receipt: ') + res.data.receipt?.ReceiptNumber);
-        setStep(1);
-        setSelectedEmployeeId('');
-        setQuantities({});
-        setDiscounts([]);
-        setRequiredAmount(0);
-        setPaidAmount(0);
-        setNotes('');
-        setConfirmed(false);
-      } else {
-        alert(res.message);
-      }
-    },
-    onError: (e) => {
-      console.error(e);
-    }
-  });
+  const numTotalRequired = Number(totalRequiredAmount) || 0;
+  const numOnlinePaid = Number(onlinePaidAmount) || 0;
+  const numTotalDiscounts = discounts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  
+  const finalRequiredAmount = numTotalRequired - numOnlinePaid - numTotalDiscounts;
+  const isFinalAmountNegative = finalRequiredAmount < 0;
 
-  const handleSave = () => {
-    if (!selectedEmployee) return;
-    const d = new Date();
-    
-    saveMutation.mutate({
-      CompanyID: companyId,
-      EmployeeID: selectedEmployee.EmployeeID,
-      ReceiptDate: d.toISOString().split('T')[0],
-      Items: activeProducts.map(p => ({
-        ProductID: p.ProductID,
-        Quantity: quantities[p.ProductID],
-        UnitPrice: p.SellingPriceIncVAT || 0,
-        CommissionPerUnit: p.DefaultCommission
-      })),
-      Discounts: discounts.filter(d => d.amount > 0).map(d => ({
-        Name: d.name,
-        Amount: d.amount
-      })),
-      RequiredAmount: requiredAmount,
-      PaidAmount: paidAmount,
-      GrossCommission: grossCommission,
-      TotalDiscount: discountTotal,
-      NetCommission: netCommission,
-      Notes: notes
+  const handleAddDiscount = () => {
+    setDiscounts([...discounts, { id: Date.now().toString(), name: 'كود خصم منصة زد', amount: 0 }]);
+  };
+
+  const handleRemoveDiscount = (id: string) => {
+    setDiscounts(discounts.filter((d) => d.id !== id));
+  };
+
+  const updateDiscount = (id: string, field: keyof AppliedDiscount, value: any) => {
+    setDiscounts(discounts.map(d => d.id === id ? { ...d, [field]: value } : d));
+  };
+
+  const updateQuantity = (productId: string, delta: number) => {
+    setQuantities(prev => {
+      const current = prev[productId] || 0;
+      const next = Math.max(0, current + delta);
+      return { ...prev, [productId]: next };
     });
   };
 
-  const isLoading = empLoading || prodLoading;
+  const handleBuildRecord = (): CommissionRecord => {
+    const d = new Date();
+    const formattedDate = d.toLocaleString('sv-SE', { timeZone: 'Asia/Riyadh' }).replace('T', ' ').slice(0, 16);
+    const trxNo = 'TRX-' + d.getFullYear() + '-' + String(Math.floor(Math.random() * 8999 + 1000));
+    
+    return {
+      id: 'REC-' + Date.now(),
+      transactionNo: trxNo,
+      companyId,
+      createdAt: d.toISOString(),
+      formattedDate,
+      employeeId: selectedEmployee?.EmployeeID || '',
+      employeeName: selectedEmployee ? (selectedEmployee.ArabicName || selectedEmployee.EnglishName) : 'غير محدد',
+      employeeCode: selectedEmployee?.EmployeeCode || '',
+      commissionType: 'PRODUCT_COMMISSION',
+      commissionTypeLabel: 'عمولة منتجات',
+      
+      quantityOrOrdersCount: totalProductsCount,
+      grossCommission,
+      totalDiscount: numTotalDiscounts,
+      netCommission: grossCommission, 
+      
+      totalRequiredAmount: numTotalRequired,
+      onlinePaidAmount: numOnlinePaid,
+      totalDiscounts: numTotalDiscounts,
+      finalRequiredAmount,
+      
+      // legacy compat
+      totalOrderValue: numTotalRequired,
+      codRequiredAmount: finalRequiredAmount,
+      remainingBalance: finalRequiredAmount,
+      
+      notes,
+      items: activeProducts.map((p) => ({
+        productId: p.ProductID,
+        sku: p.SKU,
+        productName: p.ArabicName || p.EnglishName,
+        quantity: quantities[p.ProductID],
+        unitPrice: p.SellingPriceIncVAT || p.SellingPriceExVAT || 0,
+        unitCommission: Number(p.DefaultCommission) || 0,
+        totalCommission: quantities[p.ProductID] * (Number(p.DefaultCommission) || 0),
+      })),
+      discounts: discounts.filter((d) => d.amount > 0),
+    };
+  };
 
-  if (isLoading) {
+  const saveMutation = useMutation({
+    mutationFn: (record: CommissionRecord) => commissionService.saveCommissionRecord(record),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
+      queryClient.invalidateQueries({ queryKey: ['commissionReceipts'] });
+      
+      alert('تم حفظ سجل العمولة بنجاح');
+      navigate('/commission/records');
+    },
+    onError: (err: any) => {
+      console.error(err);
+      alert('فشل الحفظ: ' + (err.message || 'خطأ غير معروف'));
+    },
+  });
+
+  const handleConfirmAndSave = () => {
+    if (!selectedEmployee) return;
+    const record = handleBuildRecord();
+    setSavedRecord(record);
+    saveMutation.mutate(record);
+  };
+
+  const handleResetForm = () => {
+    setStep(1);
+    setSelectedEmployeeId('');
+    setQuantities({});
+    setTotalRequiredAmount('');
+    setOnlinePaidAmount('');
+    setDiscounts([]);
+    setNotes('');
+    setIsConfirmed(false);
+    setShowSavedSuccessModal(false);
+    setSavedRecord(null);
+  };
+
+  const canProceedToSummary = selectedEmployeeId && totalProductsCount > 0 && numTotalRequired >= 0 && numOnlinePaid >= 0;
+
+  if (empLoading || prodLoading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
       </div>
     );
   }
-
-  if (employees.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
-        <div className="h-24 w-24 bg-amber-50 rounded-full flex items-center justify-center">
-          <AlertCircle className="h-10 w-10 text-amber-500" />
-        </div>
-        <div className="space-y-2 max-w-md">
-          <h2 className="text-2xl font-bold text-slate-900">{t('employees.noneAvailable', 'There are no employees available.')}</h2>
-          <p className="text-slate-500">You need to add at least one active employee before using the commission module.</p>
-        </div>
-        <div className="flex gap-4">
-          <Button variant="outline" onClick={() => navigate(-1)}>
-            <ArrowLeft className="mr-2 h-5 w-5" /> {t('common.back', 'Back')}
-          </Button>
-          <Button onClick={() => navigate('/hr')}>
-            <Plus className="mr-2 h-5 w-5" /> {t('employees.add', 'Add Employee')}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const steps = [
-    t('commissions.stepEmployee', 'Employee'),
-    t('commissions.stepProducts', 'Products'),
-    t('commissions.stepDiscounts', 'Discounts'),
-    t('commissions.stepClosing', 'Closing'),
-    t('commissions.stepReview', 'Review')
-  ];
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">{t('commissions.products', 'Product Commission')}</h2>
+    <div className="space-y-6 max-w-7xl mx-auto" dir="rtl">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Package className="h-6 w-6 text-emerald-600" />
+            <span>عمولة المنتجات</span>
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            إدخال المبيعات، حساب العمولة، والمبالغ المالية
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/commission/records')} className="gap-2">
+            <FileText className="h-4 w-4 text-emerald-600" />
+            <span>سجل العمولات</span>
+          </Button>
+        </div>
       </div>
 
-      <div className="flex items-center justify-between mb-8 overflow-x-auto pb-4">
-        {steps.map((s, i) => {
-          const num = i + 1;
-          const isActive = step === num;
-          const isDone = step > num;
-          return (
-            <div key={s} className="flex items-center shrink-0">
-              <div className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors",
-                isActive ? "border-indigo-600 bg-indigo-600 text-white" : 
-                isDone ? "border-indigo-600 bg-indigo-50 text-indigo-600" : 
-                "border-slate-200 text-slate-400 bg-white"
-              )}>
-                {isDone ? <CheckCircle className="h-5 w-5" /> : num}
-              </div>
-              <span className={cn(
-                "ml-3 text-sm font-medium",
-                isActive ? "text-indigo-900" :
-                isDone ? "text-indigo-600" :
-                "text-slate-400"
-              )}>
-                {s}
-              </span>
-              {i < steps.length - 1 && (
-                <div className={cn(
-                  "mx-4 h-0.5 w-12 transition-colors",
-                  isDone ? "bg-indigo-600" : "bg-slate-200"
-                )} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <Card>
-        <CardContent className="p-6">
-          {step === 1 && (
-            <div className="space-y-4 max-w-md">
-              <h3 className="text-lg font-medium">{t('commissions.stepEmployee', 'Employee')}</h3>
-              <select 
-                className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                value={selectedEmployeeId}
-                onChange={e => setSelectedEmployeeId(e.target.value)}
-              >
-                <option value="">{t('commissions.selectEmployee', 'Select Employee...')}</option>
-                {employees.map(e => (
-                  <option key={e.EmployeeID} value={e.EmployeeID}>
-                    {e.ArabicName || e.EnglishName} ({e.EmployeeCode})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Select Products</h3>
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Search products..." 
-                    className="flex h-10 w-full rounded-md border border-slate-300 pl-10 pr-3 py-2 text-sm"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
-              </div>
-              
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto p-1">
-                {products.filter(p => (p.ArabicName?.includes(search) || p.SKU?.includes(search))).map(p => {
-                  const qty = quantities[p.ProductID] || 0;
-                  return (
-                    <div key={p.ProductID} className={cn(
-                      "rounded-xl border transition-all overflow-hidden bg-white flex flex-col",
-                      qty > 0 ? "border-indigo-300 ring-1 ring-indigo-300" : "border-slate-200"
-                    )}>
-                      <div className="aspect-[4/3] bg-slate-100 flex items-center justify-center relative overflow-hidden border-b">
-                        <img 
-  src={getProductImageUrl(p.SKU, p.ImageURL)} 
-  alt={p.ArabicName || p.EnglishName} 
-  className="object-cover w-full h-full"
-  onError={handleImageError}
-                        />
-                      </div>
-                      <div className={cn("p-4 flex flex-col flex-1", qty > 0 ? "bg-indigo-50/50" : "")}>
-                        <div className="font-semibold text-slate-900 line-clamp-2 min-h-[40px] leading-tight">{p.ArabicName || p.EnglishName}</div>
-                        <div className="text-xs text-slate-500 mt-1 uppercase tracking-wider">SKU: {p.SKU}</div>
-                        <div className="text-indigo-600 font-medium text-sm mt-1">{p.DefaultCommission} SAR commission</div>
-                        
-                        <div className="flex flex-1 items-end pt-4">
-                          <div className="flex items-center justify-between gap-4 w-full">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 w-8 p-0 shrink-0 rounded-full bg-white"
-                              onClick={() => setQuantities(q => ({...q, [p.ProductID]: Math.max(0, qty - 1)}))}
-                              disabled={qty === 0}
-                            >-</Button>
-                            <span className="text-center font-semibold text-slate-700">{qty}</span>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-8 w-8 p-0 shrink-0 rounded-full border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50"
-                              onClick={() => setQuantities(q => ({...q, [p.ProductID]: qty + 1}))}
-                            >+</Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-4 max-w-lg">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Discounts</h3>
-                <Button variant="outline" size="sm" onClick={() => setDiscounts([...discounts, {id: Date.now().toString(), name: '', amount: 0}])}>
-                  <Plus className="h-4 w-4 mr-2" /> Add Discount
-                </Button>
-              </div>
-              
-              {discounts.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed">
-                  No discounts applied.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {discounts.map((d, i) => (
-                    <div key={d.id} className="flex gap-2 items-center">
-                      <input 
-                        type="text" 
-                        placeholder="Reason (e.g. Broken item)" 
-                        className="flex h-10 flex-1 rounded-md border border-slate-300 px-3 text-sm"
-                        value={d.name}
-                        onChange={e => {
-                          const nd = [...discounts];
-                          nd[i].name = e.target.value;
-                          setDiscounts(nd);
-                        }}
-                      />
-                      <input 
-                        type="number" 
-                        min="0"
-                        placeholder="Amount (SAR)" 
-                        className="flex h-10 w-32 rounded-md border border-slate-300 px-3 text-sm"
-                        value={d.amount || ''}
-                        onChange={e => {
-                          const nd = [...discounts];
-                          nd[i].amount = parseFloat(e.target.value) || 0;
-                          setDiscounts(nd);
-                        }}
-                      />
-                      <Button variant="ghost" size="icon" className="text-red-500 shrink-0" onClick={() => {
-                        setDiscounts(discounts.filter((_, idx) => idx !== i));
-                      }}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {discountTotal > grossCommission && (
-                <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm mt-4">
-                  Warning: Total discounts ({discountTotal}) exceed gross commission ({grossCommission}). Net will be 0.
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-4 max-w-lg">
-              <h3 className="text-lg font-medium">{t('commissions.dailyClosing', 'Daily Closing')}</h3>
-              <div className="space-y-4">
+      {step === 1 && (
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Right Panel: Employee & Financials */}
+          <div className="w-full lg:w-1/3 flex flex-col gap-6">
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">1</span>
+                  اختيار المندوب
+                </h3>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">{t('commissions.requiredAmount', 'Required Amount')}</label>
-                  <input 
-                    type="number"
-                    min="0"
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                    value={requiredAmount || ''}
-                    onChange={e => setRequiredAmount(parseFloat(e.target.value) || 0)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">{t('commissions.paidAmount', 'Paid Invoices Amount')}</label>
-                  <input 
-                    type="number"
-                    min="0"
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                    value={paidAmount || ''}
-                    onChange={e => setPaidAmount(parseFloat(e.target.value) || 0)}
-                  />
-                </div>
-                <div className="flex justify-between py-3 border-t border-slate-200">
-                  <span className="font-semibold">{t('commissions.remainingBalance', 'Remaining Balance')}</span>
-                  <span className={cn("font-bold text-lg", balance < 0 ? "text-red-600" : "text-emerald-600")}>
-                    {balance} SAR
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">{t('common.notes', 'Notes')}</label>
-                  <textarea 
-                    className="flex w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 min-h-[80px]"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 5 && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-medium">{t('commissions.review', 'Final Review')}</h3>
-              
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Employee</h4>
-                    <div className="font-medium">{selectedEmployee?.ArabicName || selectedEmployee?.EnglishName} ({selectedEmployee?.EmployeeCode})</div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Products ({activeProducts.length})</h4>
-                    <div className="space-y-2">
-                      {activeProducts.map(p => (
-                        <div key={p.ProductID} className="flex justify-between text-sm">
-                          <span className="truncate pr-4">{quantities[p.ProductID]}x {p.ArabicName}</span>
-                          <span className="font-medium shrink-0">{quantities[p.ProductID] * p.DefaultCommission} SAR</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {discounts.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Discounts</h4>
-                      <div className="space-y-2">
-                        {discounts.filter(d => d.amount > 0).map(d => (
-                          <div key={d.id} className="flex justify-between text-sm text-red-600">
-                            <span>{d.name || 'Discount'}</span>
-                            <span>-{d.amount} SAR</span>
-                          </div>
-                        ))}
-                      </div>
+                  <select
+                    className="w-full p-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-sm"
+                    value={selectedEmployeeId}
+                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  >
+                    <option value="">-- اختر المندوب --</option>
+                    {employees.map(e => (
+                      <option key={e.EmployeeID} value={e.EmployeeID}>{e.ArabicName || e.EnglishName} ({e.EmployeeCode})</option>
+                    ))}
+                  </select>
+                  {selectedEmployee && (
+                    <div className="p-3 bg-slate-50 rounded-lg text-sm border border-slate-100 flex justify-between items-center">
+                      <span className="text-slate-600">كود المندوب:</span>
+                      <span className="font-bold text-slate-900 font-mono">{selectedEmployee.EmployeeCode}</span>
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
 
-                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 h-fit space-y-4">
-                  <h4 className="font-semibold text-slate-900 border-b pb-2">Financial Summary</h4>
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">2</span>
+                  البيانات المالية والخصومات
+                </h3>
+                
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">إجمالي المبلغ المطلوب تحصيله من المندوب</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full p-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-sm"
+                      value={totalRequiredAmount}
+                      onChange={(e) => setTotalRequiredAmount(e.target.value ? Number(e.target.value) : '')}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">المبلغ المدفوع أونلاين</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full p-2.5 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-sm"
+                      value={onlinePaidAmount}
+                      onChange={(e) => setOnlinePaidAmount(e.target.value ? Number(e.target.value) : '')}
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-sm font-medium text-slate-700">الخصومات</label>
+                      <Button variant="outline" size="sm" onClick={handleAddDiscount} className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+                        <Plus className="w-3 h-3 mr-1" /> إضافة خصم
+                      </Button>
+                    </div>
+                    
+                    {discounts.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-2 border rounded border-dashed">لا توجد خصومات مطبقة</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {discounts.map(discount => (
+                          <div key={discount.id} className="flex gap-2 items-center bg-slate-50 p-2 rounded border">
+                            <select 
+                              className="flex-1 p-1.5 rounded border text-xs outline-none"
+                              value={discount.name}
+                              onChange={(e) => updateDiscount(discount.id, 'name', e.target.value)}
+                            >
+                              <option value="كود خصم منصة زد">كود خصم منصة زد</option>
+                              <option value="خصم آخر">خصم آخر</option>
+                            </select>
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-24 p-1.5 rounded border text-xs outline-none"
+                              value={discount.amount || ''}
+                              onChange={(e) => updateDiscount(discount.id, 'amount', Number(e.target.value))}
+                              placeholder="المبلغ"
+                            />
+                            <button onClick={() => handleRemoveDiscount(discount.id)} className="text-red-500 hover:text-red-700 p-1">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Gross Commission</span>
-                      <span className="font-medium">{grossCommission} SAR</span>
+                  <div className="pt-4 border-t border-slate-200">
+                    <div className="flex justify-between items-center bg-slate-100 p-3 rounded-lg">
+                      <span className="font-bold text-sm text-slate-700">المبلغ النهائي المطلوب تحصيله من المندوب:</span>
+                      <span className={cn("font-black text-lg", isFinalAmountNegative ? "text-red-600" : "text-slate-900")} dir="ltr">
+                        {isFinalAmountNegative ? (
+                          <span className="text-sm font-normal ml-1">(دائن) {Math.abs(finalRequiredAmount).toFixed(2)}</span>
+                        ) : (
+                          finalRequiredAmount.toFixed(2)
+                        )} ر.س
+                      </span>
                     </div>
-                    <div className="flex justify-between text-red-600">
-                      <span>Total Discounts</span>
-                      <span>-{discountTotal} SAR</span>
+                  </div>
+                  
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button 
+              disabled={!canProceedToSummary}
+              onClick={() => setStep(2)}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 text-lg"
+            >
+              عرض الملخص المالي
+            </Button>
+          </div>
+
+          {/* Left Panel: Products Grid */}
+          <div className="w-full lg:w-2/3 flex flex-col gap-4">
+            <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs">3</span>
+                شبكة المنتجات (العمولة: {grossCommission.toFixed(2)} ر.س)
+              </h3>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {products.map(product => {
+                const qty = quantities[product.ProductID] || 0;
+                const unitComm = Number(product.DefaultCommission) || 0;
+                const itemComm = qty * unitComm;
+                const img = getProductImageUrl(product.SKU, product.ImageURL, product);
+                
+                return (
+                  <div key={product.ProductID} className={cn("border rounded-xl p-3 bg-white flex flex-col items-center gap-3 transition-all", qty > 0 ? "border-emerald-500 shadow-sm ring-1 ring-emerald-500" : "border-slate-200 hover:border-emerald-300")}>
+                    <div className="h-20 w-20 rounded-lg overflow-hidden bg-slate-50 border p-1">
+                      <img src={img} alt={product.ArabicName} className="w-full h-full object-contain" />
                     </div>
-                    <div className="flex justify-between pt-2 border-t font-bold text-lg text-indigo-700">
-                      <span>Net Commission</span>
-                      <span>{netCommission} SAR</span>
+                    <div className="text-center w-full">
+                      <h4 className="font-bold text-xs text-slate-800 line-clamp-2 h-8 leading-snug" title={product.ArabicName}>{product.ArabicName}</h4>
+                      <p className="text-[10px] text-slate-500 mt-1 font-mono">{product.SKU}</p>
+                    </div>
+                    <div className="w-full bg-slate-50 rounded-lg p-2 text-center border">
+                      <span className="text-[10px] text-slate-500 block mb-1">العمولة: {unitComm.toFixed(2)} ر.س</span>
+                      <div className="flex items-center justify-between bg-white rounded-md border p-1">
+                        <button onClick={() => updateQuantity(product.ProductID, -1)} className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-600">
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          className="w-10 text-center text-sm font-bold outline-none"
+                          value={qty || ''}
+                          onChange={(e) => setQuantities({...quantities, [product.ProductID]: Number(e.target.value)})}
+                        />
+                        <button onClick={() => updateQuantity(product.ProductID, 1)} className="w-6 h-6 flex items-center justify-center bg-emerald-100 hover:bg-emerald-200 rounded text-emerald-700">
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                      {qty > 0 && (
+                        <div className="mt-2 text-xs font-bold text-emerald-700">
+                          الإجمالي: {itemComm.toFixed(2)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="max-w-4xl mx-auto">
+          <Card>
+            <CardContent className="p-6 sm:p-8">
+              <div className="flex items-center gap-3 mb-6 border-b pb-4">
+                <FileText className="h-8 w-8 text-emerald-600" />
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">الملخص النهائي للعملية</h3>
+                  <p className="text-sm text-slate-500">راجع البيانات قبل الطباعة والحفظ</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Employee Info */}
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <h4 className="text-sm font-bold text-slate-700 mb-3 border-b pb-2">بيانات المندوب والعمولة</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between"><span className="text-slate-500">اسم المندوب:</span><span className="font-bold text-slate-900">{selectedEmployee?.ArabicName || selectedEmployee?.EnglishName}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">كود المندوب:</span><span className="font-bold font-mono text-slate-900">{selectedEmployee?.EmployeeCode}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">إجمالي قطع المنتجات:</span><span className="font-bold text-slate-900">{totalProductsCount} قطعة</span></div>
+                      <div className="flex justify-between mt-2 pt-2 border-t border-slate-200">
+                        <span className="font-bold text-emerald-800">إجمالي عمولة المندوب:</span>
+                        <span className="font-black text-emerald-700 text-lg">{grossCommission.toFixed(2)} ر.س</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2 text-sm pt-4 mt-4 border-t border-slate-200">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Required Amount</span>
-                      <span className="font-medium">{requiredAmount} SAR</span>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">ملاحظات العملية (اختياري)</label>
+                    <textarea
+                      className="w-full p-3 rounded-lg border border-slate-300 focus:border-emerald-500 outline-none text-sm min-h-[100px]"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="أضف أي ملاحظات للرجوع إليها..."
+                    />
+                  </div>
+                </div>
+
+                {/* Financial Info */}
+                <div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                    <h4 className="text-sm font-bold text-slate-700 mb-2 border-b pb-2">التفاصيل المالية والتحصيل</h4>
+                    
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-600 text-sm">إجمالي المبلغ المطلوب:</span>
+                      <span className="font-bold text-slate-900">{numTotalRequired.toFixed(2)} ر.س</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Paid Invoices</span>
-                      <span className="font-medium">{paidAmount} SAR</span>
+                    
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-600 text-sm">المبلغ المدفوع أونلاين:</span>
+                      <span className="font-bold text-blue-700">{numOnlinePaid.toFixed(2)} ر.س</span>
                     </div>
-                    <div className="flex justify-between pt-2 border-t font-bold text-emerald-700">
-                      <span>Balance</span>
-                      <span>{balance} SAR</span>
+                    
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-600 text-sm">إجمالي الخصومات:</span>
+                      <span className="font-bold text-red-600">-{numTotalDiscounts.toFixed(2)} ر.س</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center py-3 px-3 mt-3 bg-white rounded-lg border border-slate-200 shadow-sm">
+                      <span className="font-bold text-slate-800 text-sm">المبلغ النهائي المطلوب تحصيله:</span>
+                      <span className={cn("font-black text-lg", isFinalAmountNegative ? "text-red-600" : "text-slate-900")}>
+                        {isFinalAmountNegative ? `(دائن) ${Math.abs(finalRequiredAmount).toFixed(2)}` : finalRequiredAmount.toFixed(2)} ر.س
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t flex items-center gap-2">
-                <input 
-                  type="checkbox" 
-                  id="confirm" 
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
-                  checked={confirmed}
-                  onChange={e => setConfirmed(e.target.checked)}
-                />
-                <label htmlFor="confirm" className="text-sm font-medium text-slate-700 select-none cursor-pointer">
-                  {t('commissions.confirmData', 'I confirm that the data has been reviewed and is correct.')}
-                </label>
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 mt-6 border-t border-slate-200">
+                <Button variant="outline" onClick={() => setStep(1)}>
+                  <ArrowLeft className="ml-2 h-4 w-4" /> رجوع للتعديل
+                </Button>
+                
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <Button
+                    onClick={() => setActiveRecordForPrint(handleBuildRecord())}
+                    variant="outline"
+                    className="gap-2 border-slate-300 w-full sm:w-auto"
+                  >
+                    <Printer className="h-4 w-4 text-slate-600" />
+                    <span>معاينة الطباعة</span>
+                  </Button>
+                  <Button
+                    onClick={handleConfirmAndSave}
+                    disabled={saveMutation.isPending}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold px-6 w-full sm:w-auto"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>{saveMutation.isPending ? 'جاري الحفظ...' : 'حفظ سجل العمولة'}</span>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSavedSuccessModal && savedRecord && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full text-center space-y-5 shadow-2xl border border-slate-200">
+            <div className="h-16 w-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+              <ShieldCheck className="h-10 w-10" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-slate-900">تم حفظ العملية بنجاح!</h3>
+              <p className="text-xs text-slate-500">رقم السجل:</p>
+              <div className="inline-block font-mono font-bold text-sm bg-slate-100 text-slate-800 px-3 py-1 rounded-lg">
+                {savedRecord.transactionNo}
               </div>
             </div>
-          )}
-
-          {/* Navigation */}
-          <div className="flex justify-between mt-8 pt-4 border-t border-slate-100">
-            <Button 
-              variant="outline" 
-              onClick={() => setStep(s => Math.max(1, s - 1))}
-              disabled={step === 1 || saveMutation.isPending}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4 rtl:rotate-180" /> {t('common.back', 'Back')}
-            </Button>
-            
-            {step < 5 ? (
-              <Button 
-                onClick={() => setStep(s => Math.min(5, s + 1))}
-                disabled={(step === 1 && !selectedEmployee) || (step === 2 && activeProducts.length === 0)}
-              >
-                {t('common.next', 'Next')} <ArrowRight className="ml-2 h-4 w-4 rtl:rotate-180" />
+            <div className="flex flex-col gap-2 pt-4">
+              <Button onClick={() => setActiveRecordForPrint(savedRecord)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                <Printer className="h-4 w-4" /> طباعة الملخص
               </Button>
-            ) : (
-              <Button 
-                onClick={handleSave}
-                disabled={!confirmed || saveMutation.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {saveMutation.isPending ? t('common.saving', 'Saving...') : t('common.save', 'Confirm & Save')}
+              <Button variant="outline" onClick={() => { handleResetForm(); navigate('/commission/records'); }}>
+                الذهاب إلى سجل العمولات
               </Button>
-            )}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      {/* Printable Modal */}
+      {activeRecordForPrint && (
+        <PrintableCommissionSummary
+          record={activeRecordForPrint}
+          onClose={() => setActiveRecordForPrint(null)}
+          autoPrint={false}
+        />
+      )}
     </div>
   );
 }

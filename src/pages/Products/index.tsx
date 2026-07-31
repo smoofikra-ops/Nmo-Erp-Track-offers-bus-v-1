@@ -18,7 +18,7 @@ export function Products() {
   const { user } = useAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
 
-  const { data: response, isLoading } = useQuery({
+  const { data: response, isLoading, refetch } = useQuery({
     queryKey: ['products', companyId],
     queryFn: () => productService.getProducts(companyId),
     enabled: Boolean(companyId),
@@ -81,7 +81,7 @@ export function Products() {
   const purchaseIncVAT = parsedPurchaseExVAT * (1 + parsedVATRate / 100);
   const sellingIncVAT = parsedSellingExVAT * (1 + parsedVATRate / 100);
   const profitAmount = parsedSellingExVAT - parsedPurchaseExVAT;
-  const profitMargin = parsedSellingExVAT > 0 ? (profitAmount / parsedSellingExVAT) * 100 : 0;
+  const profitMargin = parsedPurchaseExVAT > 0 ? (profitAmount / parsedPurchaseExVAT) * 100 : 0;
 
   
 
@@ -104,10 +104,11 @@ export function Products() {
     },
     onSuccess: async (res) => {
       if (res.success) {
+        alert('✅ تم حفظ التعديلات بنجاح.');
         resetForm();
         await queryClient.invalidateQueries({ queryKey: ['products', companyId] });
       } else {
-        alert(res.message || 'Error saving product');
+        alert('فشل الحفظ: ' + (res.message || 'خطأ غير معروف'));
       }
     }
   });
@@ -159,6 +160,7 @@ export function Products() {
       PurchaseCostIncVAT: purchaseIncVAT,
       SellingPriceExVAT: parsedSellingExVAT,
       SellingPriceIncVAT: sellingIncVAT,
+      SellingPrice: sellingIncVAT,
       ProfitAmount: profitAmount,
       ProfitMargin: profitMargin,
       Status: status,
@@ -185,7 +187,7 @@ export function Products() {
         </div>
         
       {syncResult && (
-        <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 p-4 rounded-lg shadow-sm">
+        <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 p-4 rounded-lg shadow-sm mb-4">
           <h3 className="font-semibold text-lg mb-2">نتيجة مزامنة الصور:</h3>
           <ul className="list-disc list-inside space-y-1">
             <li>إجمالي المنتجات في النظام: {syncResult.totalProducts}</li>
@@ -199,7 +201,7 @@ export function Products() {
           </ul>
         </div>
       )}
-  
+
       <Card>
           <CardContent className="p-6 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -220,15 +222,12 @@ export function Products() {
                 <input className="w-full h-10 rounded-md border px-3" value={category} onChange={e => setCategory(e.target.value)} />
               </div>
               
-              {/* Image Auto Gen */}
+              {/* Image Input */}
               <div className="col-span-1 md:col-span-2 bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row gap-4 items-center">
                 <div className="flex-1 space-y-2 w-full">
                   <label className="text-sm font-medium">رابط الصورة (Image URL)</label>
-                  <input className="w-full h-10 rounded-md border px-3" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="أدخل الرابط أو سيتم إنشاؤه تلقائياً..." />
+                  <input className="w-full h-10 rounded-md border px-3" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="أدخل الرابط..." />
                 </div>
-                <Button variant="secondary" className="mt-6 shrink-0" onClick={handleAutoGenerateImage}>
-                  <LinkIcon className="h-4 w-4 mr-2" /> إنشاء رابط تلقائي عبر SKU
-                </Button>
                 {imageUrl && (
                   <div className="h-16 w-16 border rounded bg-white p-1 shrink-0 mt-6">
                     <img src={imageUrl} alt="preview" className="w-full h-full object-contain" onError={handleImageError} />
@@ -339,7 +338,7 @@ export function Products() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredProducts.map((p, i) => {
-                const imgSource = getProductImageUrl(p.SKU, p.ImageURL);
+                const imgSource = getProductImageUrl(p.SKU, p.ImageURL || (p as any).imageUrl || (p as any).ImageUrl, p);
                 const isDeleted = p.IsDeleted === true || (p.IsDeleted as any) === 'true';
                 if (isDeleted) return null;
                 return (

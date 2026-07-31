@@ -7,17 +7,8 @@ const GAS_URL = (import.meta as any).env.VITE_GAS_WEBAPP_URL || '';
 export class ApiClient {
   private static async request<T>(action: string, payload: any = {}): Promise<ApiResponse<T>> {
     if (!GAS_URL) {
-      console.error('GAS_URL is not configured for action:', action);
-      return {
-        success: false,
-        data: null as any,
-        message: 'Google Apps Script URL is not configured. Please set VITE_GAS_WEBAPP_URL.',
-        error: {
-          code: 'MISSING_CONFIG',
-          details: 'VITE_GAS_WEBAPP_URL is not set in the environment variables.',
-        },
-        timestamp: new Date().toISOString(),
-      };
+      console.log('GAS_URL is not configured, running in mock mode for action:', action);
+      return this.mockResponse<T>(action, payload);
     }
 
     try {
@@ -130,129 +121,139 @@ export class ApiClient {
           data = { success: true };
           break;
         }
-        case 'GET_PRODUCTS': {
-          data = this.getLocalData('mock_products');
+        case 'GET_QUOTES': {
+          data = this.getLocalData('mock_quotes') || [];
           break;
         }
-        case 'CREATE_PRODUCT': {
-          const products = this.getLocalData('mock_products');
-          const newProd = { 
-            ...payload, 
-            ProductID: 'PRD-' + Date.now(),
-            ProductCode: 'P' + Math.floor(Math.random() * 10000),
-            Status: payload.Status || 'ACTIVE'
-          };
-          products.push(newProd);
-          this.setLocalData('mock_products', products);
-          data = newProd;
+        case 'CREATE_QUOTE': {
+          const quotes = this.getLocalData('mock_quotes') || [];
+          const newQuote = { ...payload, id: 'QT-' + Date.now() };
+          quotes.push(newQuote);
+          this.setLocalData('mock_quotes', quotes);
+          data = newQuote;
           break;
         }
-        case 'UPDATE_PRODUCT': {
-          const products = this.getLocalData('mock_products');
-          const index = products.findIndex((p: any) => p.ProductID === payload.ProductID);
+        case 'UPDATE_QUOTE': {
+          const quotes = this.getLocalData('mock_quotes') || [];
+          const index = quotes.findIndex((q: any) => q.id === payload.id);
           if (index !== -1) {
-            products[index] = { ...products[index], ...payload };
-            this.setLocalData('mock_products', products);
-            data = products[index];
+             quotes[index] = { ...quotes[index], ...payload };
+             this.setLocalData('mock_quotes', quotes);
+             data = quotes[index];
+          } else {
+             data = payload;
           }
           break;
         }
-        case 'DELETE_PRODUCT': {
-          const products = this.getLocalData('mock_products');
-          const newProducts = products.filter((p: any) => p.ProductID !== payload.ProductID);
-          this.setLocalData('mock_products', newProducts);
-          data = { success: true };
-          break;
-        }
-        case 'SYNC_PRODUCT_IMAGES': {
-          const products = this.getLocalData('mock_products');
-          data = { success: true, data: { totalProducts: products.length, totalImages: 10, matchCount: 5, noMatchCount: 5, updatedCount: 5, duplicates: [] } };
-          break;
-        }
-        case 'SEED_DEFAULT_PRODUCTS': {
-          const products = this.getLocalData('mock_products');
-          if (products.length === 0) {
-             const defaultProds = [
-               { ProductID: 'PRD-1', SKU: 'SKU-001', ArabicName: 'منتج 1', EnglishName: 'Product 1', DefaultCommission: 10, SellingPrice: 100, Status: 'ACTIVE' },
-               { ProductID: 'PRD-2', SKU: 'SKU-002', ArabicName: 'منتج 2', EnglishName: 'Product 2', DefaultCommission: 15, SellingPrice: 150, Status: 'ACTIVE' }
-             ];
-             this.setLocalData('mock_products', defaultProds);
+        case 'GET_COMMISSION_RECORDS':
+        case 'GET_COMMISSION_RECEIPTS': {
+          let records = this.getLocalData('mock_commission_records');
+          if (!records || records.length === 0) {
+            // Seed default records if empty
+            records = [
+              {
+                id: 'REC-1001',
+                transactionNo: 'TRX-2026-001',
+                companyId: payload.CompanyID || 'COM-0001',
+                createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+                formattedDate: '2026-07-29 09:30',
+                employeeId: 'EMP-001',
+                employeeName: 'أحمد محمود العتيبي',
+                employeeCode: 'E1001',
+                commissionType: 'PRODUCT_COMMISSION',
+                commissionTypeLabel: 'عمولة منتجات',
+                quantityOrOrdersCount: 15,
+                grossCommission: 450,
+                totalDiscount: 50,
+                netCommission: 400,
+                totalOrderValue: 2850,
+                onlinePaidAmount: 1200,
+                codRequiredAmount: 1600,
+                remainingBalance: 0,
+                notes: 'تسوية شحنة الرياض - تم خصم قطعة تالفة',
+                items: [
+                  { productId: 'P-1', sku: 'SKU-APP-1', productName: 'عصير برتقال طبيعي 1L', quantity: 10, unitCommission: 30, totalCommission: 300 },
+                  { productId: 'P-2', sku: 'SKU-APP-2', productName: 'مياه غازية فاخرة', quantity: 5, unitCommission: 30, totalCommission: 150 }
+                ],
+                discounts: [
+                  { id: 'd1', name: 'خصم تعويض عن منتج متضرر', amount: 50 }
+                ]
+              },
+              {
+                id: 'REC-1002',
+                transactionNo: 'TRX-2026-002',
+                companyId: payload.CompanyID || 'COM-0001',
+                createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+                formattedDate: '2026-07-28 16:15',
+                employeeId: 'EMP-002',
+                employeeName: 'خالد عبد الله الشمري',
+                employeeCode: 'E1002',
+                commissionType: 'ORDER_COUNT_COMMISSION',
+                commissionTypeLabel: 'عمولة عدد الطلبات',
+                quantityOrOrdersCount: 45,
+                grossCommission: 135,
+                totalDiscount: 0,
+                netCommission: 135,
+                totalOrderValue: 4500,
+                onlinePaidAmount: 2000,
+                codRequiredAmount: 2500,
+                remainingBalance: 0,
+                notes: 'تسوية عدد طلبات الأسبوع الحالي',
+                items: [],
+                discounts: []
+              }
+            ];
+            this.setLocalData('mock_commission_records', records);
           }
+          data = records;
+          break;
+        }
+        case 'CREATE_PRODUCT_COMMISSION':
+        case 'CREATE_ORDER_COUNT_COMMISSION':
+        case 'SAVE_COMMISSION_RECORD': {
+          const records = this.getLocalData('mock_commission_records') || [];
+          const recordToSave = payload.record || payload;
+          const newRecord = {
+            id: 'REC-' + Date.now(),
+            transactionNo: recordToSave.transactionNo || 'TRX-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 900 + 100)),
+            companyId: recordToSave.companyId || payload.CompanyID || 'COM-0001',
+            createdAt: new Date().toISOString(),
+            formattedDate: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Riyadh' }).replace('T', ' ').slice(0, 16),
+            ...recordToSave
+          };
+          records.unshift(newRecord);
+          this.setLocalData('mock_commission_records', records);
+          data = { receipt: { ReceiptNumber: newRecord.transactionNo }, record: newRecord };
+          break;
+        }
+        case 'DELETE_COMMISSION_RECORD': {
+          let records = this.getLocalData('mock_commission_records') || [];
+          records = records.filter((r: any) => r.id !== payload.id && r.transactionNo !== payload.id);
+          this.setLocalData('mock_commission_records', records);
           data = { success: true };
           break;
         }
-        
-        case 'GET_QUOTE_PRODUCTS': {
-          data = this.getLocalData('mock_quote_products');
-          break;
-        }
-        case 'CREATE_QUOTE_PRODUCT': {
-          const products = this.getLocalData('mock_quote_products');
-          const newProd = { 
-            ...payload, 
-            id: 'QPRD-' + Date.now(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          products.push(newProd);
-          this.setLocalData('mock_quote_products', products);
-          data = newProd;
-          break;
-        }
-        case 'GET_QUOTE_OFFERS': {
-          data = this.getLocalData('mock_quote_offers');
-          break;
-        }
-        case 'CREATE_QUOTE_OFFER': {
-          const offers = this.getLocalData('mock_quote_offers');
-          const newOffer = {
-            ...payload,
-            id: 'QOFF-' + Date.now(),
-            offerNumber: 'OFF-' + Math.floor(Math.random() * 10000),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          offers.push(newOffer);
-          this.setLocalData('mock_quote_offers', offers);
-          data = newOffer;
-          break;
-        }
-
-        case 'GET_SYSTEM_HEALTH':
-          data = {
-            gasConnected: false,
-            sheetsAccessible: false,
-            existingSheets: ['Companies', 'Users', 'Roles'],
-            missingSheets: ['Employees', 'Products'],
-            lastInitializedAt: null,
-            coreRecordsCount: 3,
-            databaseVersion: '1.0.0',
-            appVersion: '1.0.0',
-          };
-          message = 'Mock health data';
-          break;
-        case 'INITIALIZE_DATABASE':
-          data = {
-            sheetsCreated: ['Employees', 'Products', 'Settings', 'NumberSequences', 'AuditLogs'],
-            status: 'success'
-          };
-          message = 'Database initialized successfully (Mocked)';
-          break;
-        default:
-          data = null;
-          message = `Mocked action: ${action}`;
-      }
-    } catch (e: any) {
-       return { success: false, data: null, message: e.message, timestamp, error: { code: "ERROR", details: e.message } };
+      default:
+        console.warn(`[Mock] Unhandled action: \${action}`);
+        data = payload;
+        break;
     }
-
+    
     return {
       success: true,
-      data,
+      error: undefined,
+      data: data,
       message,
-      error: null,
+      timestamp,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      data: null as any,
+      message: 'Mock execution failed.',
+      error: { code: 'MOCK_ERROR', details: error.message },
       timestamp,
     };
   }
-
+}
 }
