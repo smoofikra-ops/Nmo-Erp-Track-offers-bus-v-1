@@ -4,6 +4,7 @@ import { settingsService, AppSettings } from '@/services/settingsService';
 interface SettingsContextType {
   settings: AppSettings;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
+  loadSettings: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -27,11 +28,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadSettings = async () => {
+    setIsLoading(true);
     try {
       const res = await settingsService.getSettings();
       if (res.success && res.data?.settings) {
-        setSettings((prev) => ({ ...prev, ...res.data.settings }));
-        applyBranding(res.data.settings);
+        const merged = { ...defaultSettings, ...res.data.settings };
+        setSettings(merged);
+        applyBranding(merged);
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -67,7 +70,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, isLoading }}>
+    <SettingsContext.Provider value={{ settings, updateSettings, isLoading, loadSettings }}>
       {children}
     </SettingsContext.Provider>
   );

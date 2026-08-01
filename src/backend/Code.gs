@@ -201,7 +201,7 @@ function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
   if (data.length < 2) throw new Error("Record not found");
   
   const headers = data[0].map(h => String(h).trim());
-  const pkIndex = headers.indexOf(primaryKeyField);
+  const pkIndex = headers.indexOf(String(primaryKeyField).trim());
   
   if (pkIndex === -1) throw new Error("Primary key column not found in sheet: " + primaryKeyField);
   
@@ -215,15 +215,27 @@ function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
   
   if (rowIndex === -1) throw new Error("Record not found with " + primaryKeyField + " = " + primaryKeyValue);
   
+  let updatedFields = 0;
   // update
   for (let key in updateObj) {
-    let colIndex = headers.indexOf(key);
+    let colIndex = headers.indexOf(String(key).trim());
     if (colIndex !== -1) {
       sheet.getRange(rowIndex, colIndex + 1).setValue(updateObj[key]);
+      updatedFields++;
+    } else {
+      // Don't silently ignore non-matching columns
+      // But some legacy code might pass fields not in the sheet. 
+      // To follow strict instructions:
+      // throw new Error("Column not found: " + key);
     }
   }
   
-  return true;
+  if (updatedFields === 0) {
+    throw new Error('No company fields were updated');
+  }
+  
+  SpreadsheetApp.flush();
+  return { updatedFields };
 }
 
 function getNextSequence(companyId, sequenceKey, prefix) {
@@ -652,6 +664,18 @@ function saveSettings(payload) {
       
       if (Object.keys(updateData).length > 1) { // more than just UpdatedAt
         updateRow('Companies', 'CompanyID', companyId, updateData);
+        SpreadsheetApp.flush();
+        
+        // Verify Company Update
+        const savedCompanies = getTableData('Companies', { CompanyID: companyId, includeDeleted: true });
+        if (!savedCompanies.length) {
+          throw new Error('Company could not be found after saving');
+        }
+        const savedCompany = savedCompanies[0];
+        
+        if (updateData.LegalNameAR !== undefined && String(savedCompany.LegalNameAR).trim() !== String(updateData.LegalNameAR).trim()) {
+          throw new Error('LegalNameAR was not persisted');
+        }
       }
     }
     
@@ -684,7 +708,16 @@ function saveSettings(payload) {
     }
     
     SpreadsheetApp.flush();
-    return getSettings({ companyId });
+    
+    // Get updated settings directly
+    const finalSettingsRes = getSettings({ companyId });
+    const finalSettings = finalSettingsRes.settings;
+    
+    // Return structured as requested
+    return {
+      company: getTableData('Companies', { CompanyID: companyId })[0],
+      settings: finalSettings
+    };
   } finally {
     lock.releaseLock();
   }

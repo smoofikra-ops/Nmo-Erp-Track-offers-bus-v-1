@@ -74,8 +74,9 @@ export function Settings() {
     try {
       const res = await settingsService.saveSettings(localSettings);
       if (res.success) {
-        updateSettings(localSettings);
+        if (res.data?.settings) updateSettings(res.data.settings); else updateSettings(localSettings);
         toast.success("تم حفظ الإعدادات بنجاح");
+        setIsDirty(false);
       } else {
         toast.error("حدث خطأ أثناء الحفظ");
       }
