@@ -1,3 +1,5 @@
+import { RequiredAmountItem, PaymentItem, DiscountItem } from '@/types/commissions';
+import { RequiredAmountList, PaymentList, DiscountList } from '@/components/commissions/FinancialLists';
 import toast from 'react-hot-toast';
 import { useAuth } from "@/contexts/AuthContext";
 import React, { useState, useEffect } from 'react';
@@ -58,9 +60,9 @@ export function OrderCountCommission() {
   const [ordersCount, setOrdersCount] = useState<string>('');
   const [pastOrders, setPastOrders] = useState<number>(0);
   
-  const [totalRequiredAmount, setTotalRequiredAmount] = useState<number | ''>('');
-  const [onlinePaidAmount, setOnlinePaidAmount] = useState<number | ''>('');
-  const [discounts, setDiscounts] = useState<AppliedDiscount[]>([]);
+  const [requiredItems, setRequiredItems] = useState<RequiredAmountItem[]>([]);
+  const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
+  const [discountItems, setDiscountItems] = useState<DiscountItem[]>([]);
   const [notes, setNotes] = useState('');
   
   const [activeRecordForPrint, setActiveRecordForPrint] = useState<CommissionRecord | null>(null);
@@ -105,24 +107,15 @@ export function OrderCountCommission() {
   const grossCommission = firstTier * rate1 + secondTier * rate2;
   const reachedLimitNow = pastOrders < threshold && newTotal >= threshold;
 
-  const numTotalRequired = Number(totalRequiredAmount) || 0;
-  const numOnlinePaid = Number(onlinePaidAmount) || 0;
-  const numTotalDiscounts = discounts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+  const numTotalRequired = requiredItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const numOnlinePaid = paymentItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const numTotalDiscounts = discountItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const amountBeforeCommission = numTotalRequired - numOnlinePaid - numTotalDiscounts;
   
-  const finalRequiredAmount = numTotalRequired - numOnlinePaid - numTotalDiscounts;
+  const finalRequiredAmount = amountBeforeCommission - grossCommission;
   const isFinalAmountNegative = finalRequiredAmount < 0;
 
-  const handleAddDiscount = () => {
-    setDiscounts([...discounts, { id: Date.now().toString(), name: 'كود خصم منصة زد', amount: 0 }]);
-  };
-
-  const handleRemoveDiscount = (id: string) => {
-    setDiscounts(discounts.filter((d) => d.id !== id));
-  };
-
-  const updateDiscount = (id: string, field: keyof AppliedDiscount, value: any) => {
-    setDiscounts(discounts.map(d => d.id === id ? { ...d, [field]: value } : d));
-  };
+  
 
   const handleBuildRecord = (): CommissionRecord => {
     const d = new Date();
@@ -166,7 +159,10 @@ export function OrderCountCommission() {
         tier2Count: secondTier,
         tier2Rate: rate2,
       },
-      discounts: discounts.filter((d) => d.amount > 0),
+      discounts: discountItems.map(d => ({ id: d.id, name: d.description, amount: d.amount })).filter(d => d.amount > 0),
+      requiredItems: requiredItems.filter(i => i.amount > 0 && i.description.trim() !== ''),
+      paymentItems: paymentItems.filter(i => i.amount > 0 && i.method),
+      
     };
   };
 
@@ -196,9 +192,9 @@ export function OrderCountCommission() {
     setStep(1);
     setSelectedEmployeeId('');
     setOrdersCount('');
-    setTotalRequiredAmount('');
-    setOnlinePaidAmount('');
-    setDiscounts([]);
+    setRequiredItems([]);
+    setPaymentItems([]);
+    setDiscountItems([]);
     setNotes('');
     setShowSavedSuccessModal(false);
     setSavedRecord(null);
@@ -296,82 +292,9 @@ export function OrderCountCommission() {
                 </h3>
                 
                 <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">إجمالي المبلغ المطلوب تحصيله من المندوب</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full p-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm"
-                      value={totalRequiredAmount}
-                      onChange={(e) => setTotalRequiredAmount(e.target.value ? Number(e.target.value) : '')}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">المبلغ المدفوع أونلاين</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full p-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm"
-                      value={onlinePaidAmount}
-                      onChange={(e) => setOnlinePaidAmount(e.target.value ? Number(e.target.value) : '')}
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div className="pt-2">
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-medium text-slate-700">الخصومات</label>
-                      <Button variant="outline" size="sm" onClick={handleAddDiscount} className="h-7 text-xs border-indigo-200 text-indigo-700 hover:bg-indigo-50">
-                        <Plus className="w-3 h-3 mr-1" /> إضافة خصم
-                      </Button>
-                    </div>
-                    
-                    {discounts.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-2 border rounded border-dashed">لا توجد خصومات مطبقة</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {discounts.map(discount => (
-                          <div key={discount.id} className="flex gap-2 items-center bg-slate-50 p-2 rounded border">
-                            <select 
-                              className="flex-1 p-1.5 rounded border text-xs outline-none"
-                              value={discount.name}
-                              onChange={(e) => updateDiscount(discount.id, 'name', e.target.value)}
-                            >
-                              <option value="كود خصم منصة زد">كود خصم منصة زد</option>
-                              <option value="خصم آخر">خصم آخر</option>
-                            </select>
-                            <input
-                              type="number"
-                              min="0"
-                              className="w-24 p-1.5 rounded border text-xs outline-none"
-                              value={discount.amount || ''}
-                              onChange={(e) => updateDiscount(discount.id, 'amount', Number(e.target.value))}
-                              placeholder="المبلغ"
-                            />
-                            <button onClick={() => handleRemoveDiscount(discount.id)} className="text-red-500 hover:text-red-700 p-1">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="pt-4 border-t border-slate-200">
-                    <div className="flex justify-between items-center bg-slate-100 p-3 rounded-lg">
-                      <span className="font-bold text-sm text-slate-700">المبلغ النهائي المطلوب تحصيله من المندوب:</span>
-                      <span className={cn("font-black text-lg", isFinalAmountNegative ? "text-red-600" : "text-slate-900")} dir="ltr">
-                        {isFinalAmountNegative ? (
-                          <span className="text-sm font-normal ml-1">(دائن) {Math.abs(finalRequiredAmount).toFixed(2)}</span>
-                        ) : (
-                          finalRequiredAmount.toFixed(2)
-                        )} ر.س
-                      </span>
-                    </div>
-                  </div>
-                  
+                  <RequiredAmountList items={requiredItems} onChange={setRequiredItems} />
+                  <PaymentList items={paymentItems} onChange={setPaymentItems} />
+                  <DiscountList items={discountItems} onChange={setDiscountItems} />
                 </div>
               </CardContent>
             </Card>
@@ -496,21 +419,30 @@ export function OrderCountCommission() {
                       <span className="text-slate-600 text-sm">إجمالي المبلغ المطلوب:</span>
                       <span className="font-bold text-slate-900">{numTotalRequired.toFixed(2)} ر.س</span>
                     </div>
-                    
                     <div className="flex justify-between items-center py-1">
-                      <span className="text-slate-600 text-sm">المبلغ المدفوع أونلاين:</span>
+                      <span className="text-slate-600 text-sm">إجمالي الدفعات والتسويات:</span>
                       <span className="font-bold text-blue-700">{numOnlinePaid.toFixed(2)} ر.س</span>
                     </div>
-                    
                     <div className="flex justify-between items-center py-1">
                       <span className="text-slate-600 text-sm">إجمالي الخصومات:</span>
                       <span className="font-bold text-red-600">-{numTotalDiscounts.toFixed(2)} ر.س</span>
                     </div>
-                    
+                    <div className="flex justify-between items-center py-2 mt-2 border-t border-slate-200">
+                      <span className="font-bold text-slate-700 text-sm">المبلغ قبل خصم العمولة:</span>
+                      <span className="font-bold text-slate-900">{amountBeforeCommission.toFixed(2)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-slate-600 text-sm">إجمالي عمولة المندوب:</span>
+                      <span className="font-bold text-emerald-600">-{grossCommission.toFixed(2)} ر.س</span>
+                    </div>
                     <div className="flex justify-between items-center py-3 px-3 mt-3 bg-white rounded-lg border border-slate-200 shadow-sm">
-                      <span className="font-bold text-slate-800 text-sm">المبلغ النهائي المطلوب تحصيله:</span>
-                      <span className={cn("font-black text-lg", isFinalAmountNegative ? "text-red-600" : "text-slate-900")}>
-                        {isFinalAmountNegative ? `(دائن) ${Math.abs(finalRequiredAmount).toFixed(2)}` : finalRequiredAmount.toFixed(2)} ر.س
+                      <span className="font-bold text-slate-800 text-sm">صافي المبلغ النهائي المطلوب من المندوب:</span>
+                      <span className={cn("font-black text-lg", isFinalAmountNegative ? "text-red-600" : "text-slate-900")} dir="ltr">
+                        {isFinalAmountNegative ? (
+                          <span className="text-sm font-normal ml-1">(دائن) {Math.abs(finalRequiredAmount).toFixed(2)}</span>
+                        ) : (
+                          finalRequiredAmount.toFixed(2)
+                        )} ر.س
                       </span>
                     </div>
                   </div>

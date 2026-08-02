@@ -10,6 +10,36 @@ export interface ProductCommissionItem {
   totalCommission: number;
 }
 
+export type RequiredAmountItem = {
+  id: string;
+  description: string;
+  amount: number;
+};
+
+export type PaymentMethod =
+  | 'ZID'
+  | 'BALANCE'
+  | 'CASH'
+  | 'INTERMEDIARY_ACCOUNT'
+  | 'BANK_TRANSFER'
+  | 'STC_PAY'
+  | 'CREDIT_SALE'
+  | 'OTHER';
+
+export type PaymentItem = {
+  id: string;
+  method: PaymentMethod;
+  description?: string;
+  amount: number;
+};
+
+export type DiscountItem = {
+  id: string;
+  code?: string;
+  description: string;
+  amount: number;
+};
+
 export interface AppliedDiscount {
   id: string;
   name: string;
@@ -43,7 +73,9 @@ export interface CommissionRecord {
   
   notes?: string;
   items?: ProductCommissionItem[];
-  discounts?: AppliedDiscount[];
+  discounts?: AppliedDiscount[]; // Also mapped to DiscountItem[] in logic if needed
+  requiredItems?: RequiredAmountItem[];
+  paymentItems?: PaymentItem[];
   
   orderCountDetails?: {
     pastOrders: number;

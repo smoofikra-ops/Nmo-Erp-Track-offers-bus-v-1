@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+const code = `
 import { useAuth } from "@/contexts/AuthContext";
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -8,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, Package } from 'lucide-react';
 import { format, startOfMonth, endOfDay, subDays, startOfYear, subMonths, endOfMonth, startOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { cn } from '@/utils/cn';
+import { cn } from '@/lib/utils';
 import {
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, AreaChart, Area
@@ -344,10 +346,10 @@ export function Dashboard() {
                   dataKey="value"
                 >
                   {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={\`cell-\${index}\`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <RechartsTooltip formatter={(value: number) => [`${value.toFixed(2)} ر.س`, 'المبلغ']} />
+                <RechartsTooltip formatter={(value: number) => [\`\${value.toFixed(2)} ر.س\`, 'المبلغ']} />
                 <Legend verticalAlign="bottom" height={36} />
               </PieChart>
             </ResponsiveContainer>
@@ -370,8 +372,8 @@ export function Dashboard() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}`} />
-                <RechartsTooltip formatter={(value: number) => [`${value.toFixed(2)} ر.س`, 'العمولة']} />
+                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={(v) => \`\${v}\`} />
+                <RechartsTooltip formatter={(value: number) => [\`\${value.toFixed(2)} ر.س\`, 'العمولة']} />
                 <Area type="monotone" dataKey="amount" stroke="#4f46e5" fillOpacity={1} fill="url(#colorAmount)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -391,7 +393,7 @@ export function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                <RechartsTooltip formatter={(value: number) => [`${value.toFixed(2)} ر.س`, 'العمولة']} />
+                <RechartsTooltip formatter={(value: number) => [\`\${value.toFixed(2)} ر.س\`, 'العمولة']} />
                 <Bar dataKey="commission" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
               </BarChart>
             </ResponsiveContainer>
@@ -453,7 +455,7 @@ export function Dashboard() {
                   <td className="px-6 py-4 font-bold text-indigo-600">{agent.commission.toFixed(2)} ر.س</td>
                   <td className="px-6 py-4 text-slate-600">{agent.required.toFixed(2)} ر.س</td>
                   <td className="px-6 py-4 text-emerald-600 font-medium">{agent.collected.toFixed(2)} ر.س</td>
-                  <td className={`px-6 py-4 font-black ${agent.remaining > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
+                  <td className={\`px-6 py-4 font-black \${agent.remaining > 0 ? 'text-rose-600' : 'text-emerald-500'}\`}>
                     {agent.remaining.toFixed(2)} ر.س
                   </td>
                 </tr>
@@ -465,3 +467,6 @@ export function Dashboard() {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/pages/Dashboard.tsx', code);

@@ -85,7 +85,7 @@ const SCHEMA = {
     "quantityOrOrdersCount", "grossCommission", "totalDiscount", "netCommission", 
     "totalOrderValue", "totalRequiredAmount", "onlinePaidAmount", "codRequiredAmount", 
     "totalDiscounts", "finalRequiredAmount", "remainingBalance", "notes", 
-    "items", "discounts", "orderCountDetails", "IsDeleted"
+    "items", "discounts", "orderCountDetails", "requiredItems", "paymentItems", "IsDeleted"
   ],
   CommissionReceipts: [
     "ReceiptID", "CompanyID", "ReceiptNumber", "EmployeeID", "ReceiptDate", "ReceiptTime", 
@@ -1304,6 +1304,16 @@ function saveCommissionRecord(payload) {
     if (!sheet) {
       initializeDatabase();
       sheet = ss.getSheetByName('CommissionRecords');
+    } else {
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      let colIndex = headers.length + 1;
+      const expectedHeaders = SCHEMA.CommissionRecords;
+      for (const expectedHeader of expectedHeaders) {
+        if (!headers.includes(expectedHeader)) {
+          sheet.getRange(1, colIndex).setValue(expectedHeader);
+          colIndex++;
+        }
+      }
     }
     
     // Add missing record field fallbacks
@@ -1311,6 +1321,8 @@ function saveCommissionRecord(payload) {
     if (objToInsert.items) objToInsert.items = JSON.stringify(objToInsert.items);
     if (objToInsert.discounts) objToInsert.discounts = JSON.stringify(objToInsert.discounts);
     if (objToInsert.orderCountDetails) objToInsert.orderCountDetails = JSON.stringify(objToInsert.orderCountDetails);
+    if (objToInsert.requiredItems) objToInsert.requiredItems = JSON.stringify(objToInsert.requiredItems);
+    if (objToInsert.paymentItems) objToInsert.paymentItems = JSON.stringify(objToInsert.paymentItems);
     
     objToInsert.IsDeleted = false;
     
@@ -1334,15 +1346,21 @@ function getCommissionRecords(payload) {
     let items = [];
     let discounts = [];
     let orderCountDetails = null;
+    let requiredItems = [];
+    let paymentItems = [];
     try { if (r.items) items = JSON.parse(r.items); } catch(e){}
     try { if (r.discounts) discounts = JSON.parse(r.discounts); } catch(e){}
     try { if (r.orderCountDetails) orderCountDetails = JSON.parse(r.orderCountDetails); } catch(e){}
+    try { if (r.requiredItems) requiredItems = JSON.parse(r.requiredItems); } catch(e){}
+    try { if (r.paymentItems) paymentItems = JSON.parse(r.paymentItems); } catch(e){}
     
     return {
       ...r,
       items,
       discounts,
       orderCountDetails,
+      requiredItems,
+      paymentItems,
       quantityOrOrdersCount: Number(r.quantityOrOrdersCount) || 0,
       grossCommission: Number(r.grossCommission) || 0,
       totalDiscount: Number(r.totalDiscount) || 0,
