@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { quoteService } from '@/services/quoteService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import { Quote } from '@/types/quotes';
 import { PrintLayout } from './PrintLayout';
 
@@ -14,6 +15,7 @@ interface HistoryTabProps {
 
 export function HistoryTab({ onEditQuote }: HistoryTabProps) {
   const { user } = useAuth();
+  const { requireAdminAuth } = useAdminAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
   const queryClient = useQueryClient();
 
@@ -155,14 +157,16 @@ export function HistoryTab({ onEditQuote }: HistoryTabProps) {
                       </button>
                       
                       {quote.status === 'draft' && (
-                        <button onClick={() => onEditQuote(quote)} className="p-1.5 text-slate-400 hover:text-emerald-600 bg-slate-50 hover:bg-emerald-50 rounded" title="تعديل">
+                        <button onClick={() => requireAdminAuth('تعديل عرض سعر', () => onEditQuote(quote))} className="p-1.5 text-slate-400 hover:text-emerald-600 bg-slate-50 hover:bg-emerald-50 rounded" title="تعديل">
                           <FileEdit className="w-4 h-4" />
                         </button>
                       )}
 
                       {quote.status === 'draft' && (
                         <button onClick={() => {
-                          if (confirm('هل أنت متأكد من اعتماد العرض؟')) statusMutation.mutate({ id: quote.id, status: 'approved' });
+                          requireAdminAuth('تغيير حالة عرض سعر', () => {
+                            if (confirm('هل أنت متأكد من اعتماد العرض؟')) statusMutation.mutate({ id: quote.id, status: 'approved' });
+                          });
                         }} className="p-1.5 text-slate-400 hover:text-emerald-600 bg-slate-50 hover:bg-emerald-50 rounded" title="اعتماد">
                           <CheckCircle className="w-4 h-4" />
                         </button>

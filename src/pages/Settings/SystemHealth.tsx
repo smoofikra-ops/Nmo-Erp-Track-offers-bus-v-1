@@ -1,6 +1,7 @@
 import toast from 'react-hot-toast';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { systemHealthService } from '@/services/systemHealthService';
@@ -9,6 +10,7 @@ import { Server, Database, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-
 
 export function SystemHealth() {
   const { t } = useTranslation();
+  const { requireAdminAuth } = useAdminAuth();
   const [healthData, setHealthData] = useState<SystemHealthData | null>(null);
   const [loading, setLoading] = useState(true);
   const [initializing, setInitializing] = useState(false);
@@ -34,7 +36,8 @@ export function SystemHealth() {
   }, []);
 
   const handleInitialize = async () => {
-    setInitializing(true);
+    requireAdminAuth('تهيئة قاعدة البيانات', async () => {
+      setInitializing(true);
     try {
       const res = await systemHealthService.initializeDatabase();
       if (res.success) {
@@ -47,8 +50,9 @@ export function SystemHealth() {
     } catch (error) {
       console.error(error);
     } finally {
-      setInitializing(false);
-    }
+        setInitializing(false);
+      }
+    });
   };
 
   if (loading) {

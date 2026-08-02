@@ -60,18 +60,37 @@ export function Products() {
   };
 
   const openEdit = (p: Product) => {
-    setEditingProduct(p);
-    setSku(p.SKU || '');
-    setArabicName(p.ArabicName || '');
-    setEnglishName(p.EnglishName || '');
-    setCategory(p.Category || '');
-    setAvailableQuantity(p.AvailableQuantity?.toString() || '0');
-    setPurchaseCostExVAT(p.PurchaseCostExVAT?.toString() || '0');
-    setVatRate(p.VATRate?.toString() || '15');
-    setSellingPriceExVAT(p.SellingPriceExVAT?.toString() || '0');
-    setStatus(p.Status || ProductStatus.ACTIVE);
-    setImageUrl(p.ImageURL || '');
-    setIsFormOpen(true);
+    // If it's a new product, no admin auth required.
+    if (!p.ProductID) {
+      setEditingProduct(p);
+      setSku('');
+      setArabicName('');
+      setEnglishName('');
+      setCategory('');
+      setAvailableQuantity('0');
+      setPurchaseCostExVAT('0');
+      setVatRate('15');
+      setSellingPriceExVAT('0');
+      setStatus(ProductStatus.ACTIVE);
+      setImageUrl('');
+      setIsFormOpen(true);
+      return;
+    }
+
+    requireAdminAuth('تعديل منتج', () => {
+      setEditingProduct(p);
+      setSku(p.SKU || '');
+      setArabicName(p.ArabicName || '');
+      setEnglishName(p.EnglishName || '');
+      setCategory(p.Category || '');
+      setAvailableQuantity(p.AvailableQuantity?.toString() || '0');
+      setPurchaseCostExVAT(p.PurchaseCostExVAT?.toString() || '0');
+      setVatRate(p.VATRate?.toString() || '15');
+      setSellingPriceExVAT(p.SellingPriceExVAT?.toString() || '0');
+      setStatus(p.Status || ProductStatus.ACTIVE);
+      setImageUrl(p.ImageURL || '');
+      setIsFormOpen(true);
+    });
   };
 
   // Calculations for form
@@ -375,7 +394,9 @@ export function Products() {
                     <td className="px-4 py-2 text-center">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Edit className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" className="text-red-500" onClick={() => {
-                        if (confirm('تأكيد الحذف؟')) deleteMutation.mutate(p);
+                        requireAdminAuth('حذف منتج', () => {
+                          if (confirm('تأكيد الحذف؟')) deleteMutation.mutate(p);
+                        });
                       }}><Trash2 className="h-4 w-4" /></Button>
                     </td>
                   </tr>

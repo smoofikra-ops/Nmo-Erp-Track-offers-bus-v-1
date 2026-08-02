@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export function Employees() {
   const { t } = useTranslation();
+  const { requireAdminAuth } = useAdminAuth();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
@@ -67,18 +68,19 @@ export function Employees() {
   };
 
   const openEdit = (emp: Employee) => {
-    setEditingEmployee(emp);
-    setArabicName(emp.ArabicName || '');
-    setEnglishName(emp.EnglishName || '');
-    setAlias(emp.Alias || '');
-    setMobile(emp.Mobile || '');
-    setEmail(emp.Email || '');
-    setBasicSalary(emp.BasicSalary ? String(emp.BasicSalary) : '');
-    setCommissionType(emp.CommissionType);
-    setStatus(emp.Status);
-    setNotes(emp.Notes || '');
-    setErrorMsg('');
-    setIsFormOpen(true);
+    requireAdminAuth('تعديل بيانات الموظف', () => {
+      setEditingEmployee(emp);
+      setArabicName(emp.ArabicName || '');
+      setEnglishName(emp.EnglishName || '');
+      setAlias(emp.Alias || '');
+      setMobile(emp.Mobile || '');
+      setEmail(emp.Email || '');
+      setBasicSalary(emp.BasicSalary ? String(emp.BasicSalary) : '');
+      setCommissionType(emp.CommissionType);
+      setStatus(emp.Status);
+      setNotes(emp.Notes || '');
+      setIsFormOpen(true);
+    });
   };
 
   const saveMutation = useMutation({
@@ -163,7 +165,9 @@ export function Employees() {
   };
 
   const handleDelete = (emp: Employee) => {
-    setEmployeeToDelete(emp);
+    requireAdminAuth('حذف الموظف', () => {
+      setEmployeeToDelete(emp);
+    });
   };
   const confirmDelete = () => {
     if (employeeToDelete) {
@@ -176,7 +180,9 @@ export function Employees() {
   };
 
   const handleRestore = (emp: Employee) => {
-    restoreMutation.mutate(emp);
+    requireAdminAuth('استعادة الموظف المحذوف', () => {
+      restoreMutation.mutate(emp);
+    });
   };
 
   const filtered = employees.filter(e => {

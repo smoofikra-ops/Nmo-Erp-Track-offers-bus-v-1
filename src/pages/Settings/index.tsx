@@ -46,9 +46,7 @@ const tabs = [
 export function Settings() {
   const { t } = useTranslation();
 
-  const [isSettingsAuthenticated, setIsSettingsAuthenticated] = useState(false);
-  const [settingsPassword, setSettingsPassword] = useState('');
-  const [settingsAuthError, setSettingsAuthError] = useState('');
+  const { requireAdminAuth } = useAdminAuth();
 
     const { settings, updateSettings, isLoading } = useSettings();
   const [activeTab, setActiveTab] = useState(tabs[0].id);
@@ -129,22 +127,24 @@ export function Settings() {
   };
 
   const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const res = await settingsService.saveSettings(localSettings);
-      if (res.success) {
-        if (res.data?.settings) updateSettings(res.data.settings); else updateSettings(localSettings);
-        toast.success("تم حفظ الإعدادات بنجاح");
-        setIsDirty(false);
-      } else {
+    requireAdminAuth('تعديل الإعدادات', async () => {
+      setIsSaving(true);
+      try {
+        const res = await settingsService.saveSettings(localSettings);
+        if (res.success) {
+          if (res.data?.settings) updateSettings(res.data.settings); else updateSettings(localSettings);
+          toast.success("تم حفظ الإعدادات بنجاح");
+          setIsDirty(false);
+        } else {
+          toast.error("حدث خطأ أثناء الحفظ");
+        }
+      } catch (error) {
+        console.error(error);
         toast.error("حدث خطأ أثناء الحفظ");
+      } finally {
+        setIsSaving(false);
       }
-    } catch (error) {
-      console.error(error);
-      toast.error("حدث خطأ أثناء الحفظ");
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
   const renderTabContent = () => {

@@ -32,6 +32,7 @@ export function CommissionRecords() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { requireAdminAuth } = useAdminAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
 
   // Modal / Print states
@@ -73,9 +74,11 @@ export function CommissionRecords() {
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('هل أنت تأكد من رغبتك في حذف هذا السجل؟ لا يمكن التراجع عن هذه الخطوة.')) {
-      deleteMutation.mutate(id);
-    }
+    requireAdminAuth('حذف سجل عمولة', () => {
+      if (confirm('هل أنت متأكد من رغبتك في حذف هذا السجل؟ لا يمكن التراجع عن هذه الخطوة.')) {
+        deleteMutation.mutate(id);
+      }
+    });
   };
 
   // Filter Logic

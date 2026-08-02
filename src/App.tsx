@@ -4,6 +4,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { SidebarProvider } from '@/contexts/SidebarContext';
+import { AdminSecurityProvider } from '@/contexts/AdminSecurityContext';
 
 export default function App() {
   return (
@@ -11,8 +12,10 @@ export default function App() {
       <SettingsProvider>
         <SidebarProvider>
           <AuthProvider>
+            <AdminSecurityProvider>
             <AppRouter />
             <Toaster position="top-center" toastOptions={{ duration: 3000, style: { background: '#333', color: '#fff', direction: 'rtl' } }} />
+          </AdminSecurityProvider>
           </AuthProvider>
         </SidebarProvider>
       </SettingsProvider>
