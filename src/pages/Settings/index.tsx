@@ -13,7 +13,7 @@ import {
   Database,
   Save,
   Loader2,
-  Activity,
+  Activity, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -23,6 +23,7 @@ import { CompanyInfoTab } from "./Tabs/CompanyInfoTab";
 import { BrandingTab } from "./Tabs/BrandingTab";
 import { SystemTab } from "./Tabs/SystemTab";
 import { PrintingTab } from "./Tabs/PrintingTab";
+import { SecurityTab } from "./Tabs/SecurityTab";
 import { InventoryTab } from "./Tabs/InventoryTab";
 import { CommissionTab } from "./Tabs/CommissionTab";
 import { UsersTab } from "./Tabs/UsersTab";
@@ -37,6 +38,7 @@ const tabs = [
   { id: "inventory", label: "إعدادات المخزون", icon: Package },
   { id: "commission", label: "إعدادات العمولات", icon: Percent },
   { id: "users", label: "المستخدمون والصلاحيات", icon: Users },
+  { id: "security", label: "أمان الإعدادات", icon: Lock },
   { id: "backup", label: "النسخ الاحتياطي", icon: Database },
   { id: "health", label: "صحة النظام", icon: Activity },
 ];
@@ -82,7 +84,11 @@ export function Settings() {
           
           <form onSubmit={(e) => {
             e.preventDefault();
-            if (settingsPassword === 'admin' || settingsPassword === '123456') {
+            const storedHash = localStorage.getItem('erp_settings_pwd');
+            const defaultPwd = btoa('AdminCo123');
+            const actualHash = storedHash || defaultPwd;
+            
+            if (btoa(settingsPassword) === actualHash) {
               setIsSettingsAuthenticated(true);
             } else {
               setSettingsAuthError('كلمة المرور غير صحيحة');
@@ -179,6 +185,8 @@ export function Settings() {
         );
       case "users":
         return <UsersTab />;
+      case "security":
+        return <SecurityTab />;
       case "backup":
         return <BackupTab />;
       case "health":

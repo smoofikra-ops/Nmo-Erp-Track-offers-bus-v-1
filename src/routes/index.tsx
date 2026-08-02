@@ -16,6 +16,8 @@ import { CommissionReports } from '@/pages/Commissions/Reports';
 import { Employees } from '@/pages/Employees';
 import { Products } from '@/pages/Products';
 import { QuotesPage } from '@/pages/Quotes';
+import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
+import { TermsOfService } from '@/pages/TermsOfService';
 
 const router = createBrowserRouter([
   {

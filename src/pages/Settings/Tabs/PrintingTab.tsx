@@ -7,11 +7,15 @@ interface Props {
 }
 
 export function PrintingTab({ settings, onChange }: Props) {
-  const toggleSetting = (key: keyof AppSettings) => {
-    onChange(key, String(settings[key]).toLowerCase() === 'true' ? 'false' : 'true');
+    const toggleSetting = (key: keyof AppSettings) => {
+    const currentVal = settings[key];
+    const isTrue = currentVal === true || currentVal === 'true' || currentVal === 1 || currentVal === '1';
+    onChange(key, isTrue ? 'false' : 'true');
   };
-
-  const isChecked = (key: keyof AppSettings) => String(settings[key]).toLowerCase() === 'true';
+  const isChecked = (key: keyof AppSettings) => {
+    const currentVal = settings[key];
+    return currentVal === true || currentVal === 'true' || currentVal === 1 || currentVal === '1';
+  };
 
   return (
     <div className="space-y-8">
