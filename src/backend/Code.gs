@@ -594,16 +594,38 @@ function seedDefaultProducts(payload) {
 }
 
 function getSettings(payload) {
-  const companyId = payload.companyId || payload.CompanyID || 'COM-0001';
+  const companyId = String(
+    payload.CompanyID ||
+    payload.companyId ||
+    payload.company?.CompanyID ||
+    ''
+  ).trim();
+
+  const companyCode = String(
+    payload.CompanyCode ||
+    payload.companyCode ||
+    payload.company?.CompanyCode ||
+    'COM-0001'
+  ).trim();
   
-  const companies = getTableData('Companies', { CompanyID: companyId });
+  let companies = companyId 
+    ? getTableData('Companies', { CompanyID: companyId, includeDeleted: true })
+    : getTableData('Companies', { CompanyCode: companyCode, includeDeleted: true });
+    
+  if (!companies.length && companyCode) {
+     companies = getTableData('Companies', { CompanyCode: companyCode, includeDeleted: true });
+  }
+  
   const company = companies.length > 0 ? companies[0] : null;
+  const resolvedCompanyId = company ? String(company.CompanyID).trim() : companyId;
   
-  const settingsRecords = getTableData('Settings', { CompanyID: companyId });
+  const settingsRecords = getTableData('Settings', { CompanyID: resolvedCompanyId });
   
   const settings = {};
   
   if (company) {
+    settings.CompanyID = resolvedCompanyId;
+    settings.CompanyCode = company.CompanyCode || '';
     settings.CompanyNameAr = company.LegalNameAR || company.BrandNameAR || '';
     settings.CompanyNameEn = company.LegalNameEN || company.BrandNameEN || '';
     settings.LogoURL = company.LogoURL || '';
@@ -626,67 +648,104 @@ function getSettings(payload) {
     settings[r.SettingKey] = r.SettingValue;
   });
   
-  return { settings: settings };
+  return { company: company, settings: settings };
 }
 
 function saveSettings(payload) {
-  const companyId = payload.companyId || payload.CompanyID || 'COM-0001';
+  const companyId = String(
+    payload.CompanyID ||
+    payload.companyId ||
+    payload.company?.CompanyID ||
+    ''
+  ).trim();
+
+  const companyCode = String(
+    payload.CompanyCode ||
+    payload.companyCode ||
+    payload.company?.CompanyCode ||
+    'COM-0001'
+  ).trim();
+
   const settingsObj = payload.settings || {};
   
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   
   try {
+    let companies = companyId 
+      ? getTableData('Companies', { CompanyID: companyId, includeDeleted: true })
+      : getTableData('Companies', { CompanyCode: companyCode, includeDeleted: true });
+    
+    if (!companies.length && companyCode) {
+       companies = getTableData('Companies', { CompanyCode: companyCode, includeDeleted: true });
+    }
+      
+    if (!companies.length) {
+      throw new Error(
+        'Company not found. CompanyID=' +
+        companyId +
+        ', CompanyCode=' +
+        companyCode
+      );
+    }
+    
+    const existingCompany = companies[0];
+    const resolvedCompanyId = String(existingCompany.CompanyID).trim();
+    
     // 1. Update Company
-    const companies = getTableData('Companies', { CompanyID: companyId });
-    if (companies.length > 0) {
-      const company = companies[0];
-      const updateData = {};
+    const updateData = {};
+    if ('CompanyNameAr' in settingsObj) { updateData.LegalNameAR = settingsObj.CompanyNameAr; updateData.BrandNameAR = settingsObj.CompanyNameAr; }
+    if ('CompanyNameEn' in settingsObj) { updateData.LegalNameEN = settingsObj.CompanyNameEn; updateData.BrandNameEN = settingsObj.CompanyNameEn; }
+    if ('LogoURL' in settingsObj) updateData.LogoURL = settingsObj.LogoURL;
+    if ('CommercialRegistration' in settingsObj) updateData.CommercialRegistration = settingsObj.CommercialRegistration;
+    if ('VATNumber' in settingsObj) updateData.VATNumber = settingsObj.VATNumber;
+    if ('Phone' in settingsObj) updateData.Phone = settingsObj.Phone;
+    if ('Mobile' in settingsObj) updateData.WhatsApp = settingsObj.Mobile;
+    if ('Email' in settingsObj) updateData.Email = settingsObj.Email;
+    if ('Website' in settingsObj) updateData.Website = settingsObj.Website;
+    if ('Address' in settingsObj) updateData.AddressAR = settingsObj.Address;
+    if ('City' in settingsObj) updateData.City = settingsObj.City;
+    if ('Country' in settingsObj) updateData.Country = settingsObj.Country;
+    if ('Currency' in settingsObj) updateData.Currency = settingsObj.Currency;
+    if ('Timezone' in settingsObj) updateData.Timezone = settingsObj.Timezone;
+    if ('DefaultLanguage' in settingsObj) updateData.DefaultLanguage = settingsObj.DefaultLanguage;
+    if ('DateFormat' in settingsObj) updateData.DateFormat = settingsObj.DateFormat;
+    
+    updateData.UpdatedAt = getTimestamp();
+    updateData.UpdatedBy = 'SYSTEM';
+    
+    // Remove undefined values
+    Object.keys(updateData).forEach(k => {
+      if (updateData[k] === undefined) delete updateData[k];
+    });
+    
+    if (Object.keys(updateData).length > 2) {
+      updateRow('Companies', 'CompanyID', resolvedCompanyId, updateData);
+      SpreadsheetApp.flush();
       
-      if ('CompanyNameAr' in settingsObj) { updateData.LegalNameAR = settingsObj.CompanyNameAr; updateData.BrandNameAR = settingsObj.CompanyNameAr; }
-      if ('CompanyNameEn' in settingsObj) { updateData.LegalNameEN = settingsObj.CompanyNameEn; updateData.BrandNameEN = settingsObj.CompanyNameEn; }
-      if ('LogoURL' in settingsObj) updateData.LogoURL = settingsObj.LogoURL;
-      if ('CommercialRegistration' in settingsObj) updateData.CommercialRegistration = settingsObj.CommercialRegistration;
-      if ('VATNumber' in settingsObj) updateData.VATNumber = settingsObj.VATNumber;
-      if ('Phone' in settingsObj) updateData.Phone = settingsObj.Phone;
-      if ('Mobile' in settingsObj) updateData.WhatsApp = settingsObj.Mobile;
-      if ('Email' in settingsObj) updateData.Email = settingsObj.Email;
-      if ('Website' in settingsObj) updateData.Website = settingsObj.Website;
-      if ('Address' in settingsObj) updateData.AddressAR = settingsObj.Address;
-      if ('City' in settingsObj) updateData.City = settingsObj.City;
-      if ('Country' in settingsObj) updateData.Country = settingsObj.Country;
-      if ('Currency' in settingsObj) updateData.Currency = settingsObj.Currency;
-      if ('Timezone' in settingsObj) updateData.Timezone = settingsObj.Timezone;
-      if ('DefaultLanguage' in settingsObj) updateData.DefaultLanguage = settingsObj.DefaultLanguage;
-      if ('DateFormat' in settingsObj) updateData.DateFormat = settingsObj.DateFormat;
+      const saved = getTableData('Companies', {
+        CompanyID: resolvedCompanyId,
+        includeDeleted: true
+      });
       
-      updateData.UpdatedAt = getTimestamp();
+      if (!saved.length) {
+        throw new Error('Company was not found after update');
+      }
       
-      if (Object.keys(updateData).length > 1) { // more than just UpdatedAt
-        updateRow('Companies', 'CompanyID', companyId, updateData);
-        SpreadsheetApp.flush();
-        
-        // Verify Company Update
-        const savedCompanies = getTableData('Companies', { CompanyID: companyId, includeDeleted: true });
-        if (!savedCompanies.length) {
-          throw new Error('Company could not be found after saving');
-        }
-        const savedCompany = savedCompanies[0];
-        
-        if (updateData.LegalNameAR !== undefined && String(savedCompany.LegalNameAR).trim() !== String(updateData.LegalNameAR).trim()) {
-          throw new Error('LegalNameAR was not persisted');
-        }
+      const savedCompany = saved[0];
+      if (updateData.LegalNameAR !== undefined && String(savedCompany.LegalNameAR).trim() !== String(updateData.LegalNameAR).trim()) {
+        throw new Error('LegalNameAR was not persisted');
       }
     }
     
     // 2. Update Settings table
-    const existingSettings = getTableData('Settings', { CompanyID: companyId });
+    const existingSettings = getTableData('Settings', { CompanyID: resolvedCompanyId });
     const existingKeys = existingSettings.map(r => r.SettingKey);
     
-    const companyKeys = ['CompanyNameAr', 'CompanyNameEn', 'LogoURL', 'CommercialRegistration', 'VATNumber', 'Phone', 'Mobile', 'Email', 'Website', 'Address', 'City', 'Country', 'Currency', 'Timezone', 'DefaultLanguage', 'DateFormat'];
+    const companyKeys = ['CompanyNameAr', 'CompanyNameEn', 'LogoURL', 'CommercialRegistration', 'VATNumber', 'Phone', 'Mobile', 'Email', 'Website', 'Address', 'City', 'Country', 'Currency', 'Timezone', 'DefaultLanguage', 'DateFormat', 'CompanyID', 'CompanyCode'];
     
     for (let key in settingsObj) {
-      if (companyKeys.includes(key)) continue; // skip keys that go to Companies
+      if (companyKeys.includes(key)) continue;
       
       const val = settingsObj[key] !== null && settingsObj[key] !== undefined ? String(settingsObj[key]) : '';
       
@@ -696,7 +755,7 @@ function saveSettings(payload) {
       } else {
         insertRow('Settings', {
           SettingID: generateUUID(),
-          CompanyID: companyId,
+          CompanyID: resolvedCompanyId,
           SettingGroup: 'general',
           SettingKey: key,
           SettingValue: val,
@@ -709,14 +768,11 @@ function saveSettings(payload) {
     
     SpreadsheetApp.flush();
     
-    // Get updated settings directly
-    const finalSettingsRes = getSettings({ companyId });
-    const finalSettings = finalSettingsRes.settings;
+    const finalSettingsRes = getSettings({ companyId: resolvedCompanyId });
     
-    // Return structured as requested
     return {
-      company: getTableData('Companies', { CompanyID: companyId })[0],
-      settings: finalSettings
+      company: finalSettingsRes.company,
+      settings: finalSettingsRes.settings
     };
   } finally {
     lock.releaseLock();

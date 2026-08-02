@@ -70,8 +70,10 @@ export const settingsService = {
     return ApiClient.post('GET_SETTINGS', { companyId });
   },
 
-  saveSettings: (settings: AppSettings, companyId: string = 'COM-0001'): Promise<ApiResponse<any>> => {
-    return ApiClient.post('SAVE_SETTINGS', { companyId, settings });
+  saveSettings: (settings: AppSettings, companyId?: string): Promise<ApiResponse<any>> => {
+    const resolvedCompanyId = companyId || settings.CompanyID || 'COM-0001';
+    console.log({ saveCompanyId: settings.CompanyID, saveCompanyCode: settings.CompanyCode, resolvedCompanyId });
+    return ApiClient.post('SAVE_SETTINGS', { companyId: resolvedCompanyId, settings });
   },
 
   uploadImage: (base64Data: string): Promise<ApiResponse<{ url: string }>> => {
