@@ -43,7 +43,7 @@ const tabs = [
 
 export function Settings() {
   const { t } = useTranslation();
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, isLoading } = useSettings();
   const [activeTab, setActiveTab] = useState(tabs[0].id);
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [isSaving, setIsSaving] = useState(false);
@@ -89,6 +89,22 @@ export function Settings() {
   };
 
   const renderTabContent = () => {
+    if (isLoading) {
+      return (
+        <div className="space-y-6 animate-pulse">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+                <div className="h-10 bg-slate-100 rounded w-full"></div>
+              </div>
+            ))}
+          </div>
+          <div className="h-24 bg-slate-100 rounded w-full"></div>
+        </div>
+      );
+    }
+    
     switch (activeTab) {
       case "company":
         return (
@@ -133,7 +149,7 @@ export function Settings() {
         </div>
         <Button
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || isLoading}
           className="bg-[var(--primary-color,#4f46e5)] hover:opacity-90 min-w-[120px]"
         >
           {isSaving ? (
@@ -159,11 +175,12 @@ export function Settings() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
+                  disabled={isLoading}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                     isActive
                       ? "bg-indigo-50 text-indigo-700"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
+                  } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Icon
                     className={`h-5 w-5 ${isActive ? "text-indigo-600" : "text-slate-400"}`}
@@ -176,8 +193,8 @@ export function Settings() {
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6">{renderTabContent()}</div>
+        <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
+          <div className="p-6 h-full">{renderTabContent()}</div>
         </div>
       </div>
     </div>

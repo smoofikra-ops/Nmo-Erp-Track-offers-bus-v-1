@@ -2,21 +2,28 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { Breadcrumb } from './Breadcrumb';
-import { User, LogOut, Building, ArrowLeftRight } from 'lucide-react';
+import { User, LogOut, Building, ArrowLeftRight, Menu } from 'lucide-react';
 import { Button } from './ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSidebar } from '@/contexts/SidebarContext';
 
 export function Header() {
   const { t } = useTranslation();
   const { user, logout, switchCompany } = useAuth();
   const { toggleDirection, direction } = useTheme();
+  const { toggle } = useSidebar();
 
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-        <div className="flex flex-1 items-center">
-          <Breadcrumb />
+        <div className="flex flex-1 items-center gap-x-4">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={toggle}>
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div className="hidden lg:block lg:flex-1">
+             <Breadcrumb />
+          </div>
         </div>
         
         <div className="flex items-center gap-x-4 lg:gap-x-6">
