@@ -8,10 +8,10 @@ interface Props {
 
 export function PrintingTab({ settings, onChange }: Props) {
   const toggleSetting = (key: keyof AppSettings) => {
-    onChange(key, settings[key] === 'true' ? 'false' : 'true');
+    onChange(key, String(settings[key]).toLowerCase() === 'true' ? 'false' : 'true');
   };
 
-  const isChecked = (key: keyof AppSettings) => settings[key] === 'true';
+  const isChecked = (key: keyof AppSettings) => String(settings[key]).toLowerCase() === 'true';
 
   return (
     <div className="space-y-8">

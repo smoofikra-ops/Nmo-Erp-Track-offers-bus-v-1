@@ -11,6 +11,8 @@ import {
   Settings,
   FileText,
   X,
+  Pin,
+  PinOff
 } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -20,15 +22,19 @@ import { Button } from "./ui/button";
 export function Sidebar() {
   const { t } = useTranslation();
   const { settings } = useSettings();
-  const { isOpen, setIsOpen } = useSidebar();
+  const { 
+    isPinned, togglePin, 
+    isHovered, setIsHovered, 
+    isMobileOpen, setIsMobileOpen 
+  } = useSidebar();
   const location = useLocation();
 
   // Close sidebar on mobile when navigating
   useEffect(() => {
     if (window.innerWidth < 1024) {
-      setIsOpen(false);
+      setIsMobileOpen(false);
     }
-  }, [location.pathname, setIsOpen]);
+  }, [location.pathname, setIsMobileOpen]);
 
   const navItems = [
     { to: "/", icon: LayoutDashboard, label: t("common.dashboard") },
@@ -43,82 +49,134 @@ export function Sidebar() {
     },
     { to: "/reports", icon: BarChart, label: t("modules.reports") },
   ];
+  
+  const isExpanded = isPinned || isHovered;
 
   return (
     <>
       {/* Mobile overlay */}
-      {isOpen && (
+      {isMobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden"
-          onClick={() => setIsOpen(false)}
+          onClick={() => setIsMobileOpen(false)}
         />
       )}
       
       <aside
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "fixed inset-y-0 start-0 z-50 flex w-72 flex-col border-e bg-white shadow-sm transition-transform duration-300 ease-in-out",
-          isOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"
+          "fixed inset-y-0 start-0 z-50 flex flex-col border-e bg-white shadow-sm transition-all duration-300 ease-in-out",
+          // Mobile classes
+          "w-72 lg:w-auto", 
+          isMobileOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full lg:translate-x-0",
+          // Desktop expansion
+          isExpanded ? "lg:w-72" : "lg:w-20"
         )}
       >
-        <div className="flex h-16 items-center border-b px-6 justify-between">
-          <div className="flex flex-col justify-center items-start overflow-hidden">
+        <div className="relative flex flex-col items-center pt-6 pb-4 border-b border-slate-100 min-h-[120px]">
+          {/* Pin Button (Desktop only) */}
+          <button 
+            onClick={togglePin}
+            className={cn(
+              "absolute top-4 start-4 hidden lg:flex text-slate-400 hover:text-indigo-600 transition-opacity",
+              isExpanded ? "opacity-100" : "opacity-0"
+            )}
+            title={isPinned ? "Unpin sidebar" : "Pin sidebar"}
+          >
+            {isPinned ? <Pin className="w-4 h-4" /> : <PinOff className="w-4 h-4" />}
+          </button>
+          
+          {/* Mobile close button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 end-2 lg:hidden text-slate-500"
+            onClick={() => setIsMobileOpen(false)}
+          >
+            <X className="h-5 w-5" />
+          </Button>
+
+          {/* Logo & Company Name */}
+          <div className="flex flex-col items-center justify-center w-full px-4 gap-3">
             {settings.LogoURL ? (
               <img
                 src={settings.LogoURL}
                 alt="Logo"
-                className="max-h-8 mb-1 object-contain"
+                className={cn(
+                  "object-contain transition-all duration-300",
+                  isExpanded ? "h-12 w-auto max-w-full" : "h-8 w-8"
+                )}
               />
-            ) : null}
-            <h1 className="text-xl font-bold text-indigo-900 tracking-tight truncate w-full">
-              {settings.CompanyNameAr || "NMO Labs Operations OS"}
+            ) : (
+              <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+                <LayoutDashboard className="w-6 h-6" />
+              </div>
+            )}
+            
+            <h1 
+              className={cn(
+                "font-bold text-indigo-900 tracking-tight text-center transition-all duration-300 overflow-hidden whitespace-nowrap",
+                isExpanded ? "text-sm max-w-full opacity-100" : "w-0 opacity-0 h-0 m-0"
+              )}
+            >
+              {settings.CompanyNameAr || "NMO Labs OS"}
             </h1>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden shrink-0"
-            onClick={() => setIsOpen(false)}
-          >
-            <X className="h-5 w-5" />
-          </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-6 px-4">
-          <nav className="space-y-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-indigo-50 text-indigo-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-                  )
-                }
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 flex flex-col gap-1">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              title={!isExpanded ? item.label : undefined}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200 group relative",
+                  isActive
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                  !isExpanded && "justify-center"
+                )
+              }
+            >
+              <item.icon className="h-5 w-5 shrink-0" />
+              <span 
+                className={cn(
+                  "whitespace-nowrap transition-all duration-300 overflow-hidden",
+                  isExpanded ? "ms-3 opacity-100 w-auto" : "opacity-0 w-0 ms-0"
+                )}
               >
-                <item.icon className="h-5 w-5 shrink-0" />
                 {item.label}
-              </NavLink>
-            ))}
-          </nav>
+              </span>
+            </NavLink>
+          ))}
         </div>
 
-        <div className="border-t p-4">
+        <div className="border-t p-3">
           <NavLink
             to="/settings"
+            title={!isExpanded ? t("common.settings") : undefined}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center rounded-lg px-3 py-3 text-sm font-medium transition-all duration-200",
                 isActive
                   ? "bg-indigo-50 text-indigo-700"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                !isExpanded && "justify-center"
               )
             }
           >
             <Settings className="h-5 w-5 shrink-0" />
-            {t("common.settings")}
+            <span 
+                className={cn(
+                  "whitespace-nowrap transition-all duration-300 overflow-hidden",
+                  isExpanded ? "ms-3 opacity-100 w-auto" : "opacity-0 w-0 ms-0"
+                )}
+              >
+              {t("common.settings")}
+            </span>
           </NavLink>
         </div>
       </aside>

@@ -1,20 +1,34 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface SidebarContextType {
-  isOpen: boolean;
-  toggle: () => void;
-  setIsOpen: (isOpen: boolean) => void;
+  isPinned: boolean;
+  isHovered: boolean;
+  isMobileOpen: boolean;
+  togglePin: () => void;
+  setIsHovered: (val: boolean) => void;
+  toggleMobile: () => void;
+  setIsMobileOpen: (val: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isPinned, setIsPinned] = useState(() => {
+    const saved = localStorage.getItem('sidebar_pinned');
+    return saved !== null ? saved === 'true' : true; // Default pinned
+  });
+  const [isHovered, setIsHovered] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  const toggle = () => setIsOpen((prev) => !prev);
+  useEffect(() => {
+    localStorage.setItem('sidebar_pinned', String(isPinned));
+  }, [isPinned]);
+
+  const togglePin = () => setIsPinned(!isPinned);
+  const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
 
   return (
-    <SidebarContext.Provider value={{ isOpen, toggle, setIsOpen }}>
+    <SidebarContext.Provider value={{ isPinned, isHovered, isMobileOpen, togglePin, setIsHovered, toggleMobile, setIsMobileOpen }}>
       {children}
     </SidebarContext.Provider>
   );

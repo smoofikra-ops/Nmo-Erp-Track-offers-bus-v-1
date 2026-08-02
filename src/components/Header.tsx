@@ -12,16 +12,16 @@ export function Header() {
   const { t } = useTranslation();
   const { user, logout, switchCompany } = useAuth();
   const { toggleDirection, direction } = useTheme();
-  const { toggle } = useSidebar();
+  const { toggleMobile } = useSidebar();
 
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         <div className="flex flex-1 items-center gap-x-4">
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={toggle}>
-            <Menu className="h-5 w-5" />
+          <Button variant="ghost" size="icon" onClick={toggleMobile}>
+            <Menu className="h-5 w-5 text-slate-500" />
           </Button>
-          <div className="hidden lg:block lg:flex-1">
+          <div className="flex-1">
              <Breadcrumb />
           </div>
         </div>

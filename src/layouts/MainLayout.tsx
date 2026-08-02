@@ -6,14 +6,14 @@ import { useSidebar } from '@/contexts/SidebarContext';
 import { cn } from '@/utils/cn';
 
 export function MainLayout() {
-  const { isOpen } = useSidebar();
+  const { isPinned } = useSidebar();
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <Sidebar />
       <div className={cn(
         "flex flex-1 flex-col transition-all duration-300",
-        isOpen ? "lg:ps-72" : "ps-0"
+        isPinned ? "lg:ps-72" : "lg:ps-20"
       )}>
         <Header />
         <main className="flex-1">

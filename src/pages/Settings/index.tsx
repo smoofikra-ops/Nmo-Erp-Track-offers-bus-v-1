@@ -43,7 +43,12 @@ const tabs = [
 
 export function Settings() {
   const { t } = useTranslation();
-  const { settings, updateSettings, isLoading } = useSettings();
+
+  const [isSettingsAuthenticated, setIsSettingsAuthenticated] = useState(false);
+  const [settingsPassword, setSettingsPassword] = useState('');
+  const [settingsAuthError, setSettingsAuthError] = useState('');
+
+    const { settings, updateSettings, isLoading } = useSettings();
   const [activeTab, setActiveTab] = useState(tabs[0].id);
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [isSaving, setIsSaving] = useState(false);
@@ -63,6 +68,54 @@ export function Settings() {
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
+  if (!isSettingsAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-md">
+          <div className="flex justify-center mb-6">
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-full">
+              <SettingsIcon className="w-8 h-8" />
+            </div>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 text-center mb-2">الوصول للإعدادات</h2>
+          <p className="text-slate-500 text-sm text-center mb-6">يرجى إدخال كلمة مرور المدير للوصول إلى هذه الصفحة</p>
+          
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (settingsPassword === 'admin' || settingsPassword === '123456') {
+              setIsSettingsAuthenticated(true);
+            } else {
+              setSettingsAuthError('كلمة المرور غير صحيحة');
+            }
+          }}>
+            <div className="space-y-4">
+              <div>
+                <input
+                  type="password"
+                  placeholder="كلمة المرور..."
+                  value={settingsPassword}
+                  onChange={(e) => {
+                    setSettingsPassword(e.target.value);
+                    setSettingsAuthError('');
+                  }}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent outline-none transition-all text-center"
+                  dir="ltr"
+                />
+                {settingsAuthError && (
+                  <p className="text-red-500 text-xs mt-2 text-center">{settingsAuthError}</p>
+                )}
+              </div>
+              <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                تأكيد الدخول
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+
 
   const handleChange = (key: keyof AppSettings, value: any) => {
     setIsDirty(true);
