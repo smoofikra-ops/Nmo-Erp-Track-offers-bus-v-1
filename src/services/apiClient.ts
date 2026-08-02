@@ -37,7 +37,7 @@ export class ApiClient {
       const result = await response.json();
       return result as ApiResponse<T>;
     } catch (error: any) {
-      console.error(`API Request Failed (${action}):`, error);
+      console.warn(`API Request Failed (${action}):`, error);
       return {
         success: false,
         data: null as any,

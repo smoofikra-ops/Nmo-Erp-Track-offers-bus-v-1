@@ -10,7 +10,7 @@ interface State {
   error: Error | null;
 }
 
-export class GlobalErrorBoundary extends Component<Props, State> {
+export class GlobalErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null
@@ -38,7 +38,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
             </p>
             <button
               onClick={() => {
-                this.setState({ hasError: false, error: null });
+                (this as any).setState({ hasError: false, error: null });
                 window.location.reload();
               }}
               className="w-full inline-flex justify-center items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
@@ -58,6 +58,6 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return (this as any).props.children;
   }
 }
