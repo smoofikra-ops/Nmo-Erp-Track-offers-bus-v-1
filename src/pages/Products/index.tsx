@@ -1,3 +1,4 @@
+import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import toast from 'react-hot-toast';
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,7 @@ import { getProductImageUrl, handleImageError, getDefaultProductImage } from '@/
 import { useAuth } from '@/contexts/AuthContext';
 
 export function Products() {
+  const { requireAdminAuth } = useAdminAuth();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { user } = useAuth();

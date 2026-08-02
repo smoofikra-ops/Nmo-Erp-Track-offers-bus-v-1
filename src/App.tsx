@@ -1,3 +1,4 @@
+import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { Toaster } from 'react-hot-toast';
 import { AppRouter } from '@/routes';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -8,6 +9,7 @@ import { AdminSecurityProvider } from '@/contexts/AdminSecurityContext';
 
 export default function App() {
   return (
+    <GlobalErrorBoundary>
     <ThemeProvider>
       <SettingsProvider>
         <SidebarProvider>
@@ -20,5 +22,6 @@ export default function App() {
         </SidebarProvider>
       </SettingsProvider>
     </ThemeProvider>
+    </GlobalErrorBoundary>
   );
 }
