@@ -145,6 +145,7 @@ export interface Product extends BaseEntity {
   ImageURL?: string;
   AvailableQuantity?: number;
   PurchaseCostExVAT?: number;
+  PiecesPerOfferUnit?: number;
   VATRate?: number;
   PurchaseCostIncVAT?: number;
   SellingPriceExVAT?: number;

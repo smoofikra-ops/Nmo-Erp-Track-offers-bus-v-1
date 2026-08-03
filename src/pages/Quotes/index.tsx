@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, ShoppingCart, History, CheckCircle } from 'lucide-react';
+import { FileText, ShoppingCart, History, CheckCircle, Lock } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { CatalogTab } from './CatalogTab';
 import { BuilderTab } from './BuilderTab';
@@ -8,9 +8,58 @@ import { QuoteCartItem, Quote } from '@/types/quotes';
 import { useAuth } from '@/contexts/AuthContext';
 
 export function QuotesPage() {
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [error, setError] = useState('');
+
   const [activeTab, setActiveTab] = useState<'catalog' | 'builder' | 'history'>('catalog');
   const [cartItems, setCartItems] = useState<QuoteCartItem[]>([]);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
+
+  const handleUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === 'admin') {
+      setIsUnlocked(true);
+      setError('');
+    } else {
+      setError('كلمة المرور غير صحيحة');
+      setPasswordInput('');
+    }
+  };
+
+  if (!isUnlocked) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">منطقة محمية</h2>
+          <p className="text-slate-500 mb-8">يرجى إدخال كلمة مرور مدير النظام للوصول إلى قسم عروض الأسعار.</p>
+          
+          <form onSubmit={handleUnlock} className="space-y-4">
+            <div>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="كلمة المرور"
+                className="w-full h-12 px-4 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-center"
+                autoFocus
+              />
+              {error && <p className="text-rose-500 text-sm mt-2">{error}</p>}
+            </div>
+            <button
+              type="submit"
+              className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition-colors"
+            >
+              دخول
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   const handleAddToCart = (item: QuoteCartItem) => {
     setCartItems(prev => {

@@ -1,70 +1,29 @@
-import React from 'react';
-import { Quote } from '@/types/quotes';
-import { useSettings } from '@/contexts/SettingsContext';
+const fs = require('fs');
+let code = fs.readFileSync('src/pages/Quotes/PrintLayout.tsx', 'utf8');
 
-interface PrintLayoutProps {
-  quote: Quote;
-  isManagement?: boolean;
-}
+code = code.replace(
+  "interface PrintLayoutProps {\n  quote: Quote;\n}",
+  "interface PrintLayoutProps {\n  quote: Quote;\n  isManagement?: boolean;\n}"
+);
 
-export function PrintLayout({ quote, isManagement = false }: PrintLayoutProps) {
-  const { settings } = useSettings();
-  const companyProfile = {
-    name: settings.CompanyNameAr || 'شركة نومو للتجارة',
-    vatNumber: settings.VATNumber || '310000000000003',
-    phone: settings.Mobile || settings.Phone || '0500000000',
-    email: settings.Email || 'info@nomu.example.com',
-    address: settings.Address || 'الرياض، المملكة العربية السعودية'
-  };
+code = code.replace(
+  "export function PrintLayout({ quote }: PrintLayoutProps) {",
+  "export function PrintLayout({ quote, isManagement = false }: PrintLayoutProps) {"
+);
 
-  return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          body * { visibility: hidden; }
-          #quote-print-area, #quote-print-area * { visibility: visible; }
-          #quote-print-area { position: absolute; left: 0; top: 0; width: 100%; }
-          tr { page-break-inside: avoid; }
-          .no-print { display: none !important; }
-        }
-      `}} />
-      <div className="bg-white text-black p-8 mx-auto max-w-4xl min-h-[297mm]" dir="rtl" style={{ fontFamily: 'Arial, sans-serif' }}>
-        
-        {/* Header */}
-        <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold mb-1">{companyProfile.name}</h1>
-            <div className="text-sm text-slate-600">الرقم الضريبي: {companyProfile.vatNumber}</div>
-            <div className="text-sm text-slate-600">الجوال: {companyProfile.phone}</div>
-            <div className="text-sm text-slate-600">البريد: {companyProfile.email}</div>
-            <div className="text-sm text-slate-600">العنوان: {companyProfile.address}</div>
-          </div>
-          <div className="text-left">
-            <h2 className="text-3xl font-bold text-slate-800 mb-2">عرض سعر</h2>
+const managementHeaderAddition = `
             {isManagement && (
               <div className="mt-2 inline-block bg-rose-100 text-rose-800 text-xs font-bold px-2 py-1 rounded">نسخة الإدارة (داخلية)</div>
             )}
+`;
 
-            <div className="text-sm"><span className="font-semibold inline-block w-20">رقم العرض:</span> {quote.quoteNumber || quote.id}</div>
-            <div className="text-sm"><span className="font-semibold inline-block w-20">تاريخ الإصدار:</span> {new Date(quote.createdAt || Date.now()).toLocaleDateString('ar-SA')}</div>
-            {quote.validUntil && (
-              <div className="text-sm"><span className="font-semibold inline-block w-20">صالح حتى:</span> {new Date(quote.validUntil).toLocaleDateString('ar-SA')}</div>
-            )}
-          </div>
-        </div>
+code = code.replace(
+  /<h2 className="text-3xl font-bold text-slate-800 mb-2">عرض سعر<\/h2>/,
+  `<h2 className="text-3xl font-bold text-slate-800 mb-2">عرض سعر</h2>${managementHeaderAddition}`
+);
 
-        {/* Customer Info */}
-        <div className="mb-8">
-          <h3 className="font-bold text-lg mb-3 bg-slate-100 p-2">بيانات العميل</h3>
-          <div className="grid grid-cols-2 gap-4 px-2">
-            <div><span className="font-semibold w-24 inline-block">اسم العميل:</span> {quote.customerName || '-'}</div>
-            <div><span className="font-semibold w-24 inline-block">الجوال:</span> <span dir="ltr">{quote.customerPhone || '-'}</span></div>
-            <div className="col-span-2"><span className="font-semibold w-24 inline-block">العنوان:</span> {quote.title}</div>
-          </div>
-        </div>
-
-        {/* Items Table */}
-        <table className="w-full mb-8 text-sm border-collapse border border-slate-300">
+const tableRegex = /<table className="w-full mb-8 text-sm border-collapse border border-slate-300">[\s\S]*?<\/table>/;
+const newTable = `<table className="w-full mb-8 text-sm border-collapse border border-slate-300">
           <thead>
             <tr className="bg-slate-100 text-[13px]">
               <th className="border border-slate-300 p-2 font-bold text-right w-8">م</th>
@@ -97,10 +56,13 @@ export function PrintLayout({ quote, isManagement = false }: PrintLayoutProps) {
               </tr>
             )})}
           </tbody>
-        </table>
+        </table>`;
 
-        {/* Totals */}
-        <div className={isManagement ? "grid grid-cols-2 gap-8 mb-12" : "flex justify-end mb-12"}>
+code = code.replace(tableRegex, newTable);
+
+const totalsContainerRegex = /<div className="flex justify-end mb-12">[\s\S]*?<\/div>\s*<\/div>/;
+
+const newTotals = `<div className={isManagement ? "grid grid-cols-2 gap-8 mb-12" : "flex justify-end mb-12"}>
           {isManagement && (
             <div className="bg-slate-50 p-4 border border-slate-200">
               <h3 className="font-bold text-rose-800 mb-3 border-b border-rose-200 pb-2">ملخص الإدارة المالي</h3>
@@ -162,23 +124,8 @@ export function PrintLayout({ quote, isManagement = false }: PrintLayoutProps) {
               <span>{quote.totals.finalQuotePriceIncVat.toFixed(2)} ر.س</span>
             </div>
           </div>
-        </div>
+        </div>`;
 
-        {/* Terms and Signatures */}
-        <div className="grid grid-cols-2 gap-12 text-sm mt-12">
-          <div>
-            <h3 className="font-bold mb-2">الشروط والأحكام:</h3>
-            <ul className="list-disc list-inside space-y-1 text-slate-600">
-              <li>الأسعار المعروضة صالحة حتى تاريخ الانتهاء المذكور.</li>
-              <li>أي تعديل في الكميات قد يؤدي إلى تغيير في الأسعار.</li>
-              <li>التوريد حسب توفر المخزون.</li>
-            </ul>
-          </div>
-          <div className="text-center pt-8">
-            <div className="font-bold mb-12 border-t border-slate-300 pt-4 w-64 mx-auto">الختم والتوقيع</div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
+code = code.replace(totalsContainerRegex, newTotals);
+
+fs.writeFileSync('src/pages/Quotes/PrintLayout.tsx', code);

@@ -374,20 +374,36 @@ export function CommissionRecords() {
                         <td className="px-4 py-3 text-center font-bold text-slate-800">
                           {r.quantityOrOrdersCount}
                         </td>
-                        <td className="px-4 py-3 text-left font-medium text-slate-700">
+                                                <td className="px-4 py-3 text-left font-medium text-slate-700">
                           {(r.grossCommission || 0).toFixed(2)} ر.س
                         </td>
                         <td className="px-4 py-3 text-left font-bold text-red-600">
-                          {r.totalDiscount ? `-${r.totalDiscount.toFixed(2)} ر.س` : '-'}
+                          {(() => {
+                            const disc = r.discounts ? r.discounts.reduce((s, d) => s + (Number(d.amount)||0), 0) : (r.totalDiscounts || r.totalDiscount || 0);
+                            return disc > 0 ? `-${disc.toFixed(2)} ر.س` : '-';
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-left font-medium text-blue-700">
-                          {(r.onlinePaidAmount || 0).toFixed(2)} ر.س
+                          {(() => {
+                            const pay = r.paymentItems ? r.paymentItems.reduce((s, i) => s + (Number(i.amount)||0), 0) : (r.onlinePaidAmount || 0);
+                            return pay.toFixed(2) + ' ر.س';
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-left font-bold text-amber-700">
-                          {(r.codRequiredAmount || 0).toFixed(2)} ر.س
+                          {(() => {
+                             const req = r.requiredItems ? r.requiredItems.reduce((s, i) => s + (Number(i.amount)||0), 0) : (r.totalRequiredAmount || r.totalOrderValue || 0);
+                             return req.toFixed(2) + ' ر.س';
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-left font-black text-emerald-700 text-sm">
-                          {(r.netCommission || 0).toFixed(2)} ر.س
+                          {(() => {
+                            if (r.finalRequiredAmount !== undefined && !isNaN(r.finalRequiredAmount)) return r.finalRequiredAmount.toFixed(2) + ' ر.س';
+                            const req = r.requiredItems ? r.requiredItems.reduce((s, i) => s + (Number(i.amount)||0), 0) : (r.totalRequiredAmount || r.totalOrderValue || 0);
+                            const pay = r.paymentItems ? r.paymentItems.reduce((s, i) => s + (Number(i.amount)||0), 0) : (r.onlinePaidAmount || 0);
+                            const disc = r.discounts ? r.discounts.reduce((s, d) => s + (Number(d.amount)||0), 0) : (r.totalDiscounts || r.totalDiscount || 0);
+                            const comm = r.grossCommission || 0;
+                            return (req - pay - disc - comm).toFixed(2) + ' ر.س';
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">

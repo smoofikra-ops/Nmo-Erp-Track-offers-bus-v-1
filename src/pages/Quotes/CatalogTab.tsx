@@ -85,22 +85,23 @@ export function CatalogTab({ onAddToCart, cartItems }: CatalogTabProps) {
   }, [products, search, selectedCategory, sortBy]);
 
   const handleAdd = (p: QuoteCatalogProduct) => {
+    const pieces = p.piecesPerOfferUnit || 1;
     onAddToCart({
       productId: p.id,
       sku: p.sku,
       productName: p.nameAr,
       imageUrl: p.imageUrl,
-      offerUnitName: p.offerUnitName,
-      piecesPerOfferUnit: p.piecesPerOfferUnit,
-      quantity: 1,
-      unitPurchaseCostExVat: p.purchaseCostPerOfferUnitExVat,
-      unitPurchaseCostIncVat: p.purchaseCostPerOfferUnitIncVat,
-      unitSellingPriceExVat: p.storePricePerOfferUnitExVat,
-      unitSellingPriceIncVat: p.storePricePerOfferUnitIncVat,
-      defaultUnitSellingPriceIncVat: p.storePricePerOfferUnitIncVat,
-      marketPricePerOfferUnitIncVat: p.marketPricePerOfferUnitIncVat,
+      offerUnitName: 'وحدة/حبة', // Changed from p.offerUnitName to reflect it's per piece
+      piecesPerOfferUnit: 1, // It's already 1 piece
+      quantity: 1, // 1 piece
+      unitPurchaseCostExVat: p.purchaseCostPerOfferUnitExVat / pieces,
+      unitPurchaseCostIncVat: p.purchaseCostPerOfferUnitIncVat / pieces,
+      unitSellingPriceExVat: p.storePricePerOfferUnitExVat / pieces,
+      unitSellingPriceIncVat: p.storePricePerOfferUnitIncVat / pieces,
+      defaultUnitSellingPriceIncVat: p.storePricePerOfferUnitIncVat / pieces,
+      marketPricePerOfferUnitIncVat: p.marketPricePerOfferUnitIncVat ? p.marketPricePerOfferUnitIncVat / pieces : undefined,
       vatRate: p.vatRate,
-      availableOfferUnits: p.availableOfferUnits
+      availableOfferUnits: p.availableOfferUnits ? p.availableOfferUnits * pieces : undefined
     });
   };
 

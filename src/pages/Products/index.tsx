@@ -39,6 +39,7 @@ export function Products() {
   const [category, setCategory] = useState('');
   const [availableQuantity, setAvailableQuantity] = useState('');
   const [purchaseCostExVAT, setPurchaseCostExVAT] = useState('');
+  const [piecesPerOfferUnit, setPiecesPerOfferUnit] = useState('1');
   const [vatRate, setVatRate] = useState('15');
   const [sellingPriceExVAT, setSellingPriceExVAT] = useState('');
   const [status, setStatus] = useState<ProductStatus>(ProductStatus.ACTIVE);
@@ -54,6 +55,7 @@ export function Products() {
     setCategory('');
     setAvailableQuantity('');
     setPurchaseCostExVAT('');
+    setPiecesPerOfferUnit('1');
     setVatRate('15');
     setSellingPriceExVAT('');
     setStatus(ProductStatus.ACTIVE);
@@ -71,6 +73,7 @@ export function Products() {
       setCategory('');
       setAvailableQuantity('0');
       setPurchaseCostExVAT('0');
+      setPiecesPerOfferUnit('1');
       setVatRate('15');
       setSellingPriceExVAT('0');
       setStatus(ProductStatus.ACTIVE);
@@ -87,6 +90,7 @@ export function Products() {
       setCategory(p.Category || '');
       setAvailableQuantity(p.AvailableQuantity?.toString() || '0');
       setPurchaseCostExVAT(p.PurchaseCostExVAT?.toString() || '0');
+      setPiecesPerOfferUnit(p.PiecesPerOfferUnit?.toString() || '1');
       setVatRate(p.VATRate?.toString() || '15');
       setSellingPriceExVAT(p.SellingPriceExVAT?.toString() || '0');
       setStatus(p.Status || ProductStatus.ACTIVE);
@@ -178,6 +182,7 @@ export function Products() {
       Category: category,
       AvailableQuantity: parseFloat(availableQuantity) || 0,
       PurchaseCostExVAT: parsedPurchaseExVAT,
+      PiecesPerOfferUnit: Number(piecesPerOfferUnit) || 1,
       VATRate: parsedVATRate,
       PurchaseCostIncVAT: purchaseIncVAT,
       SellingPriceExVAT: parsedSellingExVAT,
@@ -384,6 +389,8 @@ export function Products() {
                       </span>
                     </td>
                     <td className="px-4 py-2">{Number(p.PurchaseCostExVAT || 0).toFixed(2)}</td>
+                    <td className="px-4 py-2 text-center">{p.PiecesPerOfferUnit || 1}</td>
+                    <td className="px-4 py-2 text-amber-600 font-bold">{((p.PurchaseCostExVAT || 0) / (p.PiecesPerOfferUnit || 1)).toFixed(2)}</td>
                     <td className="px-4 py-2">{Number(p.PurchaseCostIncVAT || 0).toFixed(2)}</td>
                     <td className="px-4 py-2">{Number(p.SellingPriceExVAT || 0).toFixed(2)}</td>
                     <td className="px-4 py-2 font-bold text-indigo-600">{Number(p.SellingPriceIncVAT || 0).toFixed(2)}</td>
