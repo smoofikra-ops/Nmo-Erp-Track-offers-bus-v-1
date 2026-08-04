@@ -1,35 +1,7 @@
-import React from 'react';
-import { createPortal } from 'react-dom';
-// from 'react';
-import { CommissionRecord } from '@/types/commissions';
-import { useSettings } from '@/contexts/SettingsContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Printer, X, Building2, CheckCircle2 } from 'lucide-react';
-
-interface PrintableCommissionSummaryProps {
-  record: CommissionRecord;
-  onClose?: () => void;
-  autoPrint?: boolean;
-}
-
-export function PrintableCommissionSummary({
-  record,
-  onClose,
-  autoPrint = false,
-}: PrintableCommissionSummaryProps) {
-  const { settings } = useSettings();
-  const { user } = useAuth();
-  React.useEffect(() => {
-    if (autoPrint) {
-      const timer = setTimeout(() => {
-        const orig = setPrintTitle();
-        window.print();
-        document.title = orig;
-      }, 300);
-      return () => clearTimeout(timer);
+return () => clearTimeout(timer);
     }
   }, [autoPrint]);
+
 
   const setPrintTitle = () => {
     const originalTitle = document.title;
@@ -49,19 +21,57 @@ export function PrintableCommissionSummary({
     document.title = orig;
   };
 
-  const printContent = (
-    <div id="printable-summary-sheet" className="p-4 sm:p-6 font-sans text-right bg-white text-slate-900 w-full mx-auto" dir="rtl">
-      
-          {/* Header */}
-          <div className="flex items-center justify-between border-b-2 border-emerald-600 pb-3 mb-4">
-            <div className="flex items-center gap-4">
-              
-              {settings?.LogoURL ? (
-                <div className="h-12 w-16 flex items-center justify-center shrink-0">
-                  <img src={settings.LogoURL} alt="Logo" className="max-w-full max-h-full object-contain" />
-                </div>
-              ) : null}
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 print:p-0 print:bg-white print:fixed print:inset-0 print:z-50 print:block">
+      {/* Top Floating Control Bar (Hidden when printing) */}
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white/90 backdrop-blur border border-slate-200 p-2 rounded-xl shadow-lg print:hidden">
+        <Button onClick={handlePrint} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+          <Printer className="h-4 w-4" />
+          <span>طباعة الملخص (A4)</span>
+        </Button>
+        {onClose && (
+          <Button onClick={onClose} variant="outline" size="icon" className="h-9 w-9">
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
 
+      {/* Printable Sheet Container */}
+      <div className="bg-white text-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full mx-auto overflow-hidden border border-slate-200 print:shadow-none print:border-none print:max-w-none print:w-full print:rounded-none my-8 print:my-0">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #printable-summary-sheet, #printable-summary-sheet * {
+              visibility: visible;
+            }
+            #printable-summary-sheet {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+              padding: 20px;
+              box-shadow: none !important;
+              background: white !important;
+            }
+            @page {
+              size: A4 portrait;
+              margin: 12mm;
+            }
+          }
+        `}} />
+        <div id="printable-summary-sheet" className="p-8 sm:p-10 font-sans text-right" dir="rtl">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b-2 border-emerald-600 pb-6 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 bg-emerald-700 text-white rounded-2xl flex items-center justify-center shadow-md print:border print:border-emerald-800">
+                {settings?.LogoURL && settings?.ShowLogoOnPrint === 'true' ? (
+    <img src={settings.LogoURL} alt="Logo" className="w-full h-full object-contain rounded-2xl" />
+  ) : (
+    <Building2 className="h-9 w-9" />
+  )}
+              </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900 tracking-tight">{settings?.CompanyNameAr || 'شركة نمو الفكرة للتجارة'}</h1>
                 <p className="text-xs text-slate-500 mt-0.5">قسم المحاسبة والمبيعات - إدارة العمولات</p>
@@ -106,7 +116,7 @@ export function PrintableCommissionSummary({
 
           {/* Details Section based on Commission Type */}
           {record.commissionType === 'PRODUCT_COMMISSION' && record.items && record.items.length > 0 && (
-            <div className="mb-3">
+            <div className="mb-6">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">تفاصيل المنتجات والعمولات ({record.quantityOrOrdersCount} قطعة)</h3>
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <table className="w-full text-xs text-right border-collapse">
@@ -136,7 +146,7 @@ export function PrintableCommissionSummary({
           )}
 
           {record.commissionType === 'ORDER_COUNT_COMMISSION' && record.orderCountDetails && (
-            <div className="mb-3">
+            <div className="mb-6">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">تفاصيل عمولة الطلبات</h3>
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <table className="w-full text-xs text-right border-collapse">
@@ -164,7 +174,7 @@ export function PrintableCommissionSummary({
           
           {/* Required Amounts */}
           {record.requiredItems && record.requiredItems.length > 0 ? (
-            <div className="mb-3">
+            <div className="mb-6">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">تفاصيل المبالغ المطلوبة</h3>
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <table className="w-full text-xs text-right border-collapse">
@@ -193,7 +203,7 @@ export function PrintableCommissionSummary({
             </div>
           ) : (
             record.totalRequiredAmount !== undefined && (
-               <div className="mb-3">
+               <div className="mb-6">
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">تفاصيل المبالغ المطلوبة</h3>
                   <div className="overflow-hidden rounded-xl border border-slate-200 p-2.5 bg-slate-50 flex justify-between font-bold text-sm">
                      <span>إجمالي المبلغ المطلوب</span>
@@ -205,7 +215,7 @@ export function PrintableCommissionSummary({
 
           {/* Payments & Settlements */}
           {record.paymentItems && record.paymentItems.length > 0 ? (
-            <div className="mb-3">
+            <div className="mb-6">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">تفاصيل الدفعات والتسويات</h3>
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <table className="w-full text-xs text-right border-collapse">
@@ -236,7 +246,7 @@ export function PrintableCommissionSummary({
             </div>
           ) : (
              record.onlinePaidAmount !== undefined && (
-                <div className="mb-3">
+                <div className="mb-6">
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">تفاصيل الدفعات والتسويات</h3>
                   <div className="overflow-hidden rounded-xl border border-slate-200 p-2.5 bg-slate-50 flex justify-between font-bold text-sm">
                      <span>إجمالي المدفوع</span>
@@ -248,7 +258,7 @@ export function PrintableCommissionSummary({
 
           {/* Discounts */}
           {(record.discounts && record.discounts.length > 0) && (
-            <div className="mb-3">
+            <div className="mb-6">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">تفاصيل الخصومات</h3>
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <table className="w-full text-xs text-right border-collapse">
@@ -278,7 +288,7 @@ export function PrintableCommissionSummary({
           )}
 
           {/* Final Financial Summary Table */}
-          <div className="mb-3">
+          <div className="mb-6">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">الملخص المالي النهائي والتسوية</h3>
             <div className="rounded-xl border border-slate-300 overflow-hidden">
               <table className="w-full text-sm border-collapse">
@@ -331,21 +341,21 @@ export function PrintableCommissionSummary({
 
           {/* Notes Section */}
           {record.notes && (
-            <div className="mb-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
+            <div className="mb-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
               <span className="font-bold text-slate-900 block mb-1">الملاحظات:</span>
               <p className="text-slate-700 whitespace-pre-line">{record.notes}</p>
             </div>
           )}
 
           {/* Signatures & Approvals */}
-          <div className="mt-6 pt-4 border-t border-slate-300 grid grid-cols-2 gap-8 text-center text-xs relative">
+          <div className="mt-10 pt-6 border-t border-slate-300 grid grid-cols-2 gap-8 text-center text-xs relative">
             {settings.StampImageURL && (
                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20 pointer-events-none">
                  <img src={settings.StampImageURL} alt="Stamp" className="w-32 h-32 object-contain" />
                </div>
             )}
             <div>
-              <p className="font-bold text-slate-700 mb-6">توقيع المندوب</p>
+              <p className="font-bold text-slate-700 mb-10">توقيع المندوب</p>
               <div className="border-b border-slate-400 w-3/4 mx-auto mb-2"></div>
               <p className="text-[11px] font-medium text-slate-600">{record.employeeName}</p>
             </div>
@@ -366,7 +376,7 @@ export function PrintableCommissionSummary({
           </div>
 
           {/* Footer stamp */}
-          <div className="mt-4 pt-2 border-t border-slate-200 text-[9px] text-slate-500 flex justify-between items-end print:block print:w-full">
+          <div className="mt-12 pt-4 border-t border-slate-200 text-[10px] text-slate-500 flex justify-between items-end print:block print:w-full print:pt-4">
             <div className="flex flex-col gap-1 text-right">
               <span className="font-medium text-slate-700">تم إنشاء هذا المستند بواسطة: NmoLabs Flow ERP</span>
               <span>تاريخ الطباعة: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} {new Date().toLocaleTimeString('ar-SA')}</span>
@@ -376,66 +386,9 @@ export function PrintableCommissionSummary({
               <span>Document Version: Version 1.0</span>
             </div>
           </div>
-        
-    </div>
-  );
-
-  return (
-    <>
-      {/* On-screen Modal View */}
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 print:hidden">
-        {/* Top Floating Control Bar */}
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-white/90 backdrop-blur border border-slate-200 p-2 rounded-xl shadow-lg">
-          <Button onClick={handlePrint} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-            <Printer className="h-4 w-4" />
-            <span>طباعة الملخص (A4)</span>
-          </Button>
-          {onClose && (
-            <Button onClick={onClose} variant="outline" size="icon" className="h-9 w-9">
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-        
-        {/* Modal Sheet Container */}
-        <div className="bg-white text-slate-900 rounded-2xl shadow-2xl max-w-3xl w-full mx-auto overflow-hidden border border-slate-200 my-8">
-          {printContent}
         </div>
       </div>
-      
-      {/* Print Portal */}
-      {createPortal(
-        <div id="print-portal-root" className="hidden print:block w-full">
-          <style dangerouslySetInnerHTML={{ __html: `
-            @media print {
-              body > *:not(#print-portal-root) {
-                display: none !important;
-              }
-              #print-portal-root {
-                display: block !important;
-                width: 100%;
-                background: white !important;
-                margin: 0;
-                padding: 0;
-              }
-              @page {
-                size: A4 portrait;
-                margin: 8mm;
-              }
-              .report-section, table, tr, .summary-card, .signature-section {
-                break-inside: avoid;
-                page-break-inside: avoid;
-              }
-              #printable-summary-sheet {
-                padding: 0 !important;
-                box-shadow: none !important;
-              }
-            }
-          `}} />
-          {printContent}
-        </div>,
-        document.body
-      )}
-    </>
+    </div>
   );
 }
+
