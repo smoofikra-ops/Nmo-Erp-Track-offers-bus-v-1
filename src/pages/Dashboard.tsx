@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { commissionService } from '@/services/commissionService';
 import { CommissionRecord, CommissionTypeCategory } from '@/types/commissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, Package } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, Package, Lock } from 'lucide-react';
 import { format, startOfMonth, endOfDay, subDays, startOfYear, subMonths, endOfMonth, startOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/utils/cn';
@@ -17,6 +17,20 @@ import {
 export function Dashboard() {
   const { user } = useAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
+  const [isMetricsUnlocked, setIsMetricsUnlocked] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const handleUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === 'admin') {
+      setIsMetricsUnlocked(true);
+      setPasswordError('');
+    } else {
+      setPasswordError('كلمة المرور غير صحيحة');
+      setPasswordInput('');
+    }
+  };
 
   const { data: recordsRes, isLoading } = useQuery({
     queryKey: ['commissionRecords', companyId],
@@ -205,13 +219,13 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto" dir="rtl">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto w-full min-w-0" dir="rtl">
       
       {/* Filters Section */}
       <Card className="border-slate-200">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="flex flex-wrap items-center gap-3">
+        <CardContent className="p-3 sm:p-5">
+          <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full lg:w-auto">
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1">
                 <CalendarIcon className="h-4 w-4 text-slate-500 ml-1" />
                 <select 
@@ -238,7 +252,7 @@ export function Dashboard() {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 w-full lg:w-auto">
               <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1.5 px-3 flex-1 md:flex-none">
                 <Users className="h-4 w-4 text-slate-500" />
                 <select 
@@ -271,61 +285,90 @@ export function Dashboard() {
       </Card>
 
       {/* Hero Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-emerald-100 bg-emerald-50">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
-              <TrendingUp className="h-6 w-6" />
+      {!isMetricsUnlocked ? (
+        <Card className="border-slate-200 bg-white shadow-sm overflow-hidden w-full">
+          <CardContent className="p-4 sm:p-6 flex flex-col items-center justify-center text-center">
+            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mb-3 sm:mb-4">
+              <Lock className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-emerald-800">إجمالي العمولات</p>
-              <h3 className="text-2xl font-black text-emerald-950 mt-1">{totalCommissions.toFixed(2)}</h3>
-              <p className="text-xs text-emerald-700 mt-1">{numberOfOperations} عملية</p>
-            </div>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1 sm:mb-2">البيانات المالية محمية</h3>
+            <p className="text-xs sm:text-sm text-slate-500 mb-4 sm:mb-6">يرجى إدخال كلمة مرور الإدارة لعرض الملخص المالي.</p>
+            <form onSubmit={handleUnlock} className="flex w-full max-w-sm items-center space-x-2 space-x-reverse">
+              <input
+                type="password"
+                placeholder="كلمة المرور"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="flex h-10 sm:h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                autoFocus
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-slate-900 text-white h-10 sm:h-11 px-4 py-2 hover:bg-slate-800 shrink-0"
+              >
+                عرض
+              </button>
+            </form>
+            {passwordError && <p className="text-rose-500 text-xs sm:text-sm mt-2">{passwordError}</p>}
           </CardContent>
         </Card>
-        
-        <Card className="border-indigo-100 bg-indigo-50">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center shrink-0">
-              <Banknote className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-indigo-800">إجمالي المبالغ المطلوبة</p>
-              <h3 className="text-2xl font-black text-indigo-950 mt-1">{totalRequired.toFixed(2)}</h3>
-              <p className="text-xs text-indigo-700 mt-1">المستحق من المندوبين</p>
-            </div>
-          </CardContent>
-        </Card>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 w-full">
+          <Card className="border-emerald-100 bg-emerald-50 min-w-0">
+            <CardContent className="p-2.5 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-4">
+              <div className="h-7 w-7 sm:h-12 sm:w-12 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                <TrendingUp className="h-3.5 w-3.5 sm:h-6 sm:w-6" />
+              </div>
+              <div className="overflow-hidden w-full">
+                <p className="text-[10px] sm:text-sm font-medium text-emerald-800 truncate leading-tight">إجمالي العمولات</p>
+                <h3 className="text-sm sm:text-2xl font-black text-emerald-950 mt-0.5 sm:mt-1 truncate">{totalCommissions.toFixed(2)}</h3>
+                <p className="text-[9px] sm:text-xs text-emerald-700 mt-0.5 sm:mt-1 truncate">{numberOfOperations} عملية</p>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="border-indigo-100 bg-indigo-50 min-w-0">
+            <CardContent className="p-2.5 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-4">
+              <div className="h-7 w-7 sm:h-12 sm:w-12 rounded-full bg-indigo-200 text-indigo-700 flex items-center justify-center shrink-0">
+                <Banknote className="h-3.5 w-3.5 sm:h-6 sm:w-6" />
+              </div>
+              <div className="overflow-hidden w-full">
+                <p className="text-[10px] sm:text-sm font-medium text-indigo-800 truncate leading-tight">إجمالي المطلوبات</p>
+                <h3 className="text-sm sm:text-2xl font-black text-indigo-950 mt-0.5 sm:mt-1 truncate">{totalRequired.toFixed(2)}</h3>
+                <p className="text-[9px] sm:text-xs text-indigo-700 mt-0.5 sm:mt-1 truncate">من المندوبين</p>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="border-blue-100 bg-blue-50">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center shrink-0">
-              <Wallet className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-blue-800">إجمالي المدفوع والتسويات</p>
-              <h3 className="text-2xl font-black text-blue-950 mt-1">{totalCollected.toFixed(2)}</h3>
-              <p className="text-xs text-blue-700 mt-1">الدفعات المستلمة</p>
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="border-blue-100 bg-blue-50 min-w-0">
+            <CardContent className="p-2.5 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-4">
+              <div className="h-7 w-7 sm:h-12 sm:w-12 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center shrink-0">
+                <Wallet className="h-3.5 w-3.5 sm:h-6 sm:w-6" />
+              </div>
+              <div className="overflow-hidden w-full">
+                <p className="text-[10px] sm:text-sm font-medium text-blue-800 truncate leading-tight">إجمالي المدفوع</p>
+                <h3 className="text-sm sm:text-2xl font-black text-blue-950 mt-0.5 sm:mt-1 truncate">{totalCollected.toFixed(2)}</h3>
+                <p className="text-[9px] sm:text-xs text-blue-700 mt-0.5 sm:mt-1 truncate">التسويات والدفعات</p>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="border-rose-100 bg-rose-50">
-          <CardContent className="p-5 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-rose-200 text-rose-700 flex items-center justify-center shrink-0">
-              <CreditCard className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-rose-800">صافي المطلوب من المندوبين</p>
-              <h3 className="text-2xl font-black text-rose-950 mt-1" dir="ltr">{netRequiredFromAgents.toFixed(2)}</h3>
-              <p className="text-xs text-rose-700 mt-1">{activeAgentsCount} مندوب نشط</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="border-rose-100 bg-rose-50 min-w-0">
+            <CardContent className="p-2.5 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-4">
+              <div className="h-7 w-7 sm:h-12 sm:w-12 rounded-full bg-rose-200 text-rose-700 flex items-center justify-center shrink-0">
+                <CreditCard className="h-3.5 w-3.5 sm:h-6 sm:w-6" />
+              </div>
+              <div className="overflow-hidden w-full">
+                <p className="text-[10px] sm:text-sm font-medium text-rose-800 truncate leading-tight">صافي المطلوب</p>
+                <h3 className="text-sm sm:text-2xl font-black text-rose-950 mt-0.5 sm:mt-1 truncate" dir="ltr">{netRequiredFromAgents.toFixed(2)}</h3>
+                <p className="text-[9px] sm:text-xs text-rose-700 mt-0.5 sm:mt-1 truncate">{activeAgentsCount} مندوب نشط</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 w-full min-w-0">
         {/* Charts: Pie (Commission Types) */}
         <Card className="border-slate-200">
           <CardHeader>
@@ -379,7 +422,7 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 w-full min-w-0">
         {/* Charts: Bar (Agents commissions) */}
         <Card className="border-slate-200">
           <CardHeader>

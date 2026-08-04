@@ -16,8 +16,8 @@ export function MainLayout() {
         isPinned ? "lg:ps-72" : "lg:ps-20"
       )}>
         <Header />
-        <main className="flex-1">
-          <div className="w-full max-w-full px-4 py-8 sm:px-6 lg:px-8">
+        <main className="flex-1 min-w-0 overflow-x-hidden">
+          <div className="w-full max-w-full px-2 sm:px-4 py-6 sm:py-8 lg:px-8 min-w-0">
             <Outlet />
           </div>
         </main>
