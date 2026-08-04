@@ -67,7 +67,22 @@ export function Products() {
     // If it's a new product, no admin auth required.
     if (!p.ProductID) {
       setEditingProduct(p);
-      setSku('');
+      
+      // Auto-generate SKU
+      let maxNum = 0;
+      const allProds = products || [];
+      allProds.forEach(prod => {
+        const match = prod.SKU?.match(/PRD-\d{4}-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
+      const year = new Date().getFullYear();
+      const nextNumStr = String(maxNum + 1).padStart(6, '0');
+      const newSku = `PRD-${year}-${nextNumStr}`;
+      
+      setSku(newSku);
       setArabicName('');
       setEnglishName('');
       setCategory('');

@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+const fs = require('fs');
+
+const content = `import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CommissionRecord } from '@/types/commissions';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -36,7 +38,7 @@ export function PrintableCommissionSummary({
     const originalTitle = document.title;
     const commTypeStr = record.commissionType === 'PRODUCT_COMMISSION' ? 'عمولة المنتجات' : 'عمولة الطلبات';
     const dateStr = record.createdAt ? record.createdAt.split('T')[0] : new Date().toISOString().split('T')[0];
-    document.title = `${commTypeStr} - ${record.employeeName} - ${dateStr}`;
+    document.title = \`\${commTypeStr} - \${record.employeeName} - \${dateStr}\`;
     return originalTitle;
   };
 
@@ -133,13 +135,13 @@ export function PrintableCommissionSummary({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {record.items && record.items.length > 0 ? (
-                  record.items.map((d, i) => (
+                {record.details && record.details.length > 0 ? (
+                  record.details.map((d, i) => (
                     <tr key={i} className="hover:bg-slate-50/50">
-                      <td className="py-1.5 px-2 font-semibold text-slate-900 truncate max-w-[150px]">{d.productName}</td>
+                      <td className="py-1.5 px-2 font-semibold text-slate-900 truncate max-w-[150px]">{d.name}</td>
                       <td className="py-1.5 px-2 text-center font-mono">{d.quantity}</td>
-                      <td className="py-1.5 px-2 text-slate-600">{d.unitCommission} {record.commissionType === 'PRODUCT_COMMISSION' ? '%' : 'ر.س'}</td>
-                      <td className="py-1.5 px-2 font-bold text-left font-mono">{d.totalCommission.toFixed(2)}</td>
+                      <td className="py-1.5 px-2 text-slate-600">{d.commissionRate} {record.commissionType === 'PRODUCT_COMMISSION' ? '%' : 'ر.س'}</td>
+                      <td className="py-1.5 px-2 font-bold text-left font-mono">{d.commissionAmount.toFixed(2)}</td>
                     </tr>
                   ))
                 ) : (
@@ -217,7 +219,7 @@ export function PrintableCommissionSummary({
 
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{ __html: \`
         @media print {
           @page {
             size: A4 portrait;
@@ -228,14 +230,14 @@ export function PrintableCommissionSummary({
             print-color-adjust: exact !important;
             background: white !important;
           }
-          .print\\:hidden {
+          .print\\\\:hidden {
             display: none !important;
           }
           * {
             break-inside: avoid !important;
           }
         }
-      `}} />
+      \`}} />
     </div>
   );
 
@@ -246,3 +248,6 @@ export function PrintableCommissionSummary({
     document.body
   );
 }
+`;
+fs.writeFileSync('src/components/commissions/PrintableCommissionSummary.tsx', content);
+console.log("Rewrote PrintableCommissionSummary.tsx");

@@ -1,18 +1,19 @@
-import React, { useState, useMemo } from 'react';
+const fs = require('fs');
+
+const content = `import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import { hasPermission, RolePermissions } from '@/utils/permissions';
 import { CommissionRecord } from '@/types/commissions';
-import { commissionService } from '@/services/commissionService';
 import { PrintableCommissionSummary } from '@/components/commissions/PrintableCommissionSummary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-
+import { Input } from '@/components/ui/input';
 import { ArrowLeft, Search, TrendingUp, CreditCard, Package, Filter, Eye, Printer, Trash2, Calendar, Lock, Plus, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -34,17 +35,22 @@ export function CommissionRecords() {
   
   const canViewFinancials = user ? (hasPermission(user.role, RolePermissions.CAN_VIEW_FINANCIAL_SUMMARY) || financialAccessGranted) : false;
 
-  const { data: allRecords = [] as CommissionRecord[], isLoading: recordsLoading } = useQuery<CommissionRecord[]>({
+  const { data: allRecords = [], isLoading: recordsLoading } = useQuery({
     queryKey: ['commissionRecords'],
     queryFn: async () => {
-      const response = await commissionService.getCommissionRecords('COM-0001');
-      return (response.data || []) as CommissionRecord[];
+      const recordsCol = collection(db, 'commission_records');
+      const recordSnapshot = await getDocs(recordsCol);
+      const recordsList = recordSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as CommissionRecord[];
+      return recordsList;
     },
   });
 
   const deleteRecordMutation = useMutation({
     mutationFn: async (recordId: string) => {
-      await commissionService.deleteCommissionRecord(recordId);
+      await deleteDoc(doc(db, 'commission_records', recordId));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
@@ -88,7 +94,7 @@ export function CommissionRecords() {
   const totalCodCollected = filteredRecords.reduce((sum, r) => sum + (r.codRequiredAmount || 0), 0);
   const totalItemsCount = filteredRecords.reduce((sum, r) => sum + (r.quantityOrOrdersCount || 0), 0);
 
-  const uniqueEmployees = Array.from(new Set(allRecords.map(r => JSON.stringify({ id: r.employeeId, name: r.employeeName, code: r.employeeCode })))).map(s => JSON.parse(s as string));
+  const uniqueEmployees = Array.from(new Set(allRecords.map(r => JSON.stringify({ id: r.employeeId, name: r.employeeName, code: r.employeeCode })))).map(s => JSON.parse(s));
 
   const groupedRecords: { [key: string]: CommissionRecord[] } = {};
   filteredRecords.forEach(rec => {
@@ -210,7 +216,10 @@ export function CommissionRecords() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input type="text" placeholder="البحث برقم العملية، المندوب..." className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 pl-3 pr-10"
+              <Input
+                type="text"
+                placeholder="البحث برقم العملية، المندوب..."
+                className="pl-3 pr-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -253,7 +262,7 @@ export function CommissionRecords() {
       {/* Table */}
       <Card className="border-slate-200 shadow-sm overflow-hidden">
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-xs text-right whitespace-nowrap hidden md:table">
+          <table className="w-full text-xs text-right whitespace-nowrap">
             <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3.5">رقم العملية</th>
@@ -302,7 +311,7 @@ export function CommissionRecords() {
                         )}
                         {canViewFinancials && (
                           <td className="px-4 py-3 text-left font-bold text-red-600">
-                            {r.totalDiscount > 0 ? `-${r.totalDiscount.toFixed(2)} ر.س` : '-'}
+                            {r.totalDiscount > 0 ? \`-\${r.totalDiscount.toFixed(2)} ر.س\` : '-'}
                           </td>
                         )}
                         {canViewFinancials && (
@@ -335,71 +344,6 @@ export function CommissionRecords() {
               )}
             </tbody>
           </table>
-
-          {/* Mobile Cards View */}
-          <div className="md:hidden divide-y divide-slate-100">
-            {Object.keys(groupedRecords).length === 0 ? (
-              <div className="p-8 text-center text-slate-500">لا توجد سجلات</div>
-            ) : (
-              Object.entries(groupedRecords).map(([dateStr, records]) => (
-                <React.Fragment key={dateStr}>
-                  <div className="bg-slate-50/80 px-4 py-2 font-bold text-slate-800 text-[11px] border-y border-slate-200">
-                    {dateStr}
-                  </div>
-                  {records.map(r => (
-                    <div key={r.id} className="p-4 space-y-3" onClick={() => setViewRecordModal(r)}>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="font-mono font-bold text-emerald-700">{r.transactionNo}</span>
-                          <span className="block text-slate-500 text-[10px] mt-0.5">{r.formattedDate}</span>
-                        </div>
-                        <div className="text-left">
-                          <span className="font-bold text-slate-900 block">{r.employeeName}</span>
-                          <span className="text-[10px] text-slate-400 block">{r.employeeCode}</span>
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px] bg-slate-50 p-2 rounded-lg">
-                        <span className="text-slate-600">نوع العمولة</span>
-                        <span className="font-bold text-emerald-700">{r.commissionType === 'PRODUCT_COMMISSION' ? 'منتجات' : 'طلبات'}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px] bg-slate-50 p-2 rounded-lg">
-                        <span className="text-slate-600">الكمية/الطلبات</span>
-                        <span className="font-mono font-bold">{r.quantityOrOrdersCount}</span>
-                      </div>
-                      
-                      {canViewFinancials && (
-                        <>
-                          <div className="flex justify-between items-center text-[11px] bg-slate-50 p-2 rounded-lg border-b border-slate-200">
-                            <span className="text-slate-600">إجمالي العمولة</span>
-                            <span className="font-bold">{r.grossCommission?.toFixed(2)} ر.س</span>
-                          </div>
-                          <div className="flex justify-between items-center text-[11px] bg-slate-50 p-2 rounded-lg border-b border-slate-200">
-                            <span className="text-slate-600">المطلوب (COD)</span>
-                            <span className="font-bold text-amber-700">{r.codRequiredAmount?.toFixed(2) || '0.00'} ر.س</span>
-                          </div>
-                        </>
-                      )}
-                      
-                      <div className="flex justify-between items-center text-sm p-2 bg-emerald-50 rounded-lg">
-                        <span className="text-emerald-900 font-bold">صافي العمولة</span>
-                        <span className="font-black text-emerald-700">{r.netCommission?.toFixed(2)} ر.س</span>
-                      </div>
-                      
-                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                        <Button variant="outline" size="sm" className="h-8 text-slate-600 w-full" onClick={(e) => { e.stopPropagation(); setViewRecordModal(r); }}>
-                          <Eye className="h-4 w-4 ml-2" /> التفاصيل
-                        </Button>
-                        <Button variant="outline" size="sm" className="h-8 text-emerald-600 w-full" onClick={(e) => { e.stopPropagation(); setSelectedRecordForPrint(r); }}>
-                          <Printer className="h-4 w-4 ml-2" /> طباعة
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </React.Fragment>
-              ))
-            )}
-          </div>
-  
         </CardContent>
       </Card>
 
@@ -497,3 +441,7 @@ export function CommissionRecords() {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/pages/Commissions/CommissionRecords.tsx', content);
+console.log("Re-generated CommissionRecords.tsx");

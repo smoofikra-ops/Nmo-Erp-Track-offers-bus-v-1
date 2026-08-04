@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type UserRole = 'ADMIN' | 'USER';
+export type UserRole = 'ADMIN' | 'MANAGER' | 'ACCOUNTANT' | 'SALES_SUPERVISOR' | 'SALES_REPRESENTATIVE' | 'USER';
 
 export interface User {
   id: string;
@@ -33,34 +33,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     // Mock login logic
+    
     if (email === 'admin@erp.com' && password === 'admin') {
       const newUser: User = {
         id: '1',
         name: 'Admin User',
         email,
         role: 'ADMIN',
-        companies: [
-          { id: 'COM-0001', name: 'NmoLabs Corp' },
-          { id: 'COM-0002', name: 'NmoLabs Retail' }
-        ],
-        currentCompanyId: 'COM-0001'
+        companies: [{ id: 'COM-0001', name: 'NmoLabs' }],
+        currentCompanyId: 'COM-0001',
       };
       setUser(newUser);
       localStorage.setItem('erp_user', JSON.stringify(newUser));
-    } else if (email === 'user@erp.com' && password === 'user') {
+    } else if (email === 'rep@erp.com' && password === 'rep') {
       const newUser: User = {
         id: '2',
-        name: 'Regular User',
+        name: 'Sales Rep',
         email,
-        role: 'USER',
-        companies: [
-          { id: 'COM-0001', name: 'NmoLabs Corp' }
-        ],
-        currentCompanyId: 'COM-0001'
+        role: 'SALES_REPRESENTATIVE',
+        companies: [{ id: 'COM-0001', name: 'NmoLabs' }],
+        currentCompanyId: 'COM-0001',
+      };
+      setUser(newUser);
+      localStorage.setItem('erp_user', JSON.stringify(newUser));
+    } else if (email === 'acc@erp.com' && password === 'acc') {
+      const newUser: User = {
+        id: '3',
+        name: 'Accountant User',
+        email,
+        role: 'ACCOUNTANT',
+        companies: [{ id: 'COM-0001', name: 'NmoLabs' }],
+        currentCompanyId: 'COM-0001',
       };
       setUser(newUser);
       localStorage.setItem('erp_user', JSON.stringify(newUser));
     } else {
+
       throw new Error('Invalid credentials. Use admin@erp.com / admin or user@erp.com / user');
     }
   };
