@@ -1,22 +1,13 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/routes/index.tsx', 'utf8');
 
-// Add imports
-const importsToAdd = `import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
-import { TermsOfService } from '@/pages/TermsOfService';`;
+let code = fs.readFileSync('src/routes/index.tsx', 'utf8');
 
-content = content.replace("import { QuotesPage } from '@/pages/Quotes';", "import { QuotesPage } from '@/pages/Quotes';\n" + importsToAdd);
+code = "import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';\n" + code;
 
-// Add routes
-const routesToAdd = `  {
-    path: '/privacy',
-    element: <PrivacyPolicy />,
-  },
-  {
-    path: '/terms',
-    element: <TermsOfService />,
-  },`;
+code = code.replace(
+  /path: '\/',\n\s*element: <ProtectedRoute \/>,/,
+  "path: '/',\n    element: <ProtectedRoute />,\n    errorElement: <RouteErrorBoundary />,"
+);
 
-content = content.replace("  {    path: '/login',", routesToAdd + "\n  {    path: '/login',");
-
-fs.writeFileSync('src/routes/index.tsx', content);
+fs.writeFileSync('src/routes/index.tsx', code);
+console.log("Patched routes to use RouteErrorBoundary");

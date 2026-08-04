@@ -1,21 +1,12 @@
 const fs = require('fs');
 
-function fixFile(file) {
-  let code = fs.readFileSync(file, 'utf8');
-  
-  // Fix imports
-  if (!code.includes('import { RequiredAmountItem')) {
-    code = `import { RequiredAmountItem, PaymentItem, DiscountItem } from '@/types/commissions';\nimport { RequiredAmountList, PaymentList, DiscountList } from './components/FinancialLists';\n` + code;
-  }
-  
-  // Fix setTotalRequiredAmount in resetForm
-  code = code.replace(/setTotalRequiredAmount\(''\);\s*setOnlinePaidAmount\(''\);\s*setDiscounts\(\[\]\);/g, "setRequiredItems([]);\n    setPaymentItems([]);\n    setDiscountItems([]);");
-  
-  // Fix discountItems in handleBuildRecord
-  code = code.replace(/discountItems: discountItems\.filter\(d => d\.amount > 0\),/g, ""); // Remove the duplicate property, I used `discounts: ...`
+// Fix Products Table
+let pCode = fs.readFileSync('src/pages/Products/index.tsx', 'utf8');
+pCode = pCode.replace(/onClick=\{\(\) => setProductToDelete\(p\)\}/g, "onClick={() => { if (confirm('تأكيد الحذف؟')) deleteMutation.mutate(p); }}");
+fs.writeFileSync('src/pages/Products/index.tsx', pCode);
 
-  fs.writeFileSync(file, code);
-}
-
-fixFile('src/pages/Commissions/OrderCountCommission.tsx');
-fixFile('src/pages/Commissions/ProductCommission.tsx');
+// Fix Quotes History Table
+let qCode = fs.readFileSync('src/pages/Quotes/HistoryTab.tsx', 'utf8');
+// Fix property names
+qCode = qCode.replace(/finalTotal/g, 'grandTotal'); // Let's check Quote type in a moment... Wait, let's just use what's in the actual mapping
+qCode = qCode.replace(/totalProfit/g, 'totalProfit'); // Wait, let's look at the mapping for Desktop: q.grandTotal and q.totalProfit ? 

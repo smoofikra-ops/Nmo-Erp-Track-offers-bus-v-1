@@ -101,7 +101,7 @@ export function Employees() {
         await queryClient.invalidateQueries({ queryKey: ['employees', companyId] });
       } else {
         console.error('Save error details:', res);
-        if (res.error?.details?.includes('DuplicateMobile') || res.message?.includes('DuplicateMobile')) {
+        if ((typeof res.error?.details === 'string' && res.error.details.includes('DuplicateMobile')) || (typeof res.message === 'string' && res.message.includes('DuplicateMobile'))) {
           setErrorMsg(t('employees.duplicateMobile', 'رقم الجوال مسجل مسبقاً.'));
         } else {
           setErrorMsg('تعذر حفظ بيانات الموظف. يرجى المحاولة لاحقاً.');
@@ -187,7 +187,7 @@ export function Employees() {
   };
 
   const filtered = employees.filter(e => {
-    if (search && !(e.ArabicName?.includes(search) || e.EnglishName?.includes(search) || e.EmployeeCode?.includes(search) || e.Mobile?.includes(search))) return false;
+    if (search && !(String(e.ArabicName || '').includes(search) || String(e.EnglishName || '').includes(search) || String(e.EmployeeCode || '').includes(search) || String(e.Mobile || '').includes(search))) return false;
     if (statusFilter && e.Status !== statusFilter) return false;
     if (commissionFilter && e.CommissionType !== commissionFilter) return false;
     return true;
@@ -390,7 +390,7 @@ export function Employees() {
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left hidden md:table">
             <thead className="bg-slate-50 text-slate-500 border-b">
               <tr>
                 <th className="px-6 py-4 font-medium">{t('employees.code', 'Code')}</th>
@@ -451,6 +451,64 @@ export function Employees() {
               })}
             </tbody>
           </table>
+
+          {/* Mobile Cards View */}
+          <div className="md:hidden divide-y divide-slate-100 p-2">
+            {filtered.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">لا توجد بيانات</div>
+            ) : (
+              filtered.map((e, i) => {
+                const isDeleted = e.IsDeleted === true || (e.IsDeleted as any) === 'TRUE' || (e.IsDeleted as any) === 'true';
+                return (
+                  <div key={i} className={`bg-white border ${isDeleted ? 'border-red-200 bg-red-50' : 'border-slate-100'} rounded-lg p-4 mb-3 space-y-3 shadow-sm`}>
+                    <div className="flex justify-between items-start border-b pb-2">
+                      <div>
+                        <span className="font-bold text-slate-900 block">{e.ArabicName || e.EnglishName}</span>
+                        <span className="text-xs text-slate-500 font-mono mt-0.5">{e.EmployeeCode}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                        e.Status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' :
+                        e.Status === 'INACTIVE' ? 'bg-slate-100 text-slate-800' :
+                        'bg-rose-100 text-rose-800'
+                      }`}>
+                        {e.Status === 'ACTIVE' ? t('employees.statusActive', 'Active') : e.Status === 'INACTIVE' ? t('employees.statusInactive', 'Inactive') : t('employees.statusSuspended', 'Suspended')}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">{t('employees.mobile', 'Mobile')}:</span>
+                      <span className="font-medium text-slate-800" dir="ltr">{e.Mobile}</span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">{t('employees.commissionType', 'Commission')}:</span>
+                      <span className="font-medium text-indigo-600">{getCommissionTypeLabel(e.CommissionType)}</span>
+                    </div>
+                    
+                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                      {isDeleted ? (
+                         isAdmin && (
+                           <Button variant="outline" size="sm" onClick={() => handleRestore(e)} className="h-8 text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+                             <RotateCcw className="h-4 w-4 mr-1 ml-1" /> {t('common.restore', 'Restore')}
+                           </Button>
+                         )
+                      ) : (
+                        <>
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(e)} className="h-8 text-indigo-600">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(e)} className="h-8 text-red-600">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+  
         </CardContent>
       </Card>
     </div>

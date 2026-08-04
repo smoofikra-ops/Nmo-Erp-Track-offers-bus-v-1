@@ -219,6 +219,8 @@ export function PrintableCommissionSummary({
 
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
+          #root { display: none !important; }
+          .fixed.inset-0 { position: relative !important; }
           @page {
             size: A4 portrait;
             margin: 0;

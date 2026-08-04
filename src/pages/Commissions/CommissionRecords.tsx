@@ -24,6 +24,8 @@ export function CommissionRecords() {
   const { requireAdminAuth } = useAdminAuth();
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [showMetrics, setShowMetrics] = useState(false);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('');
   const [dateFilter, setDateFilter] = useState('');

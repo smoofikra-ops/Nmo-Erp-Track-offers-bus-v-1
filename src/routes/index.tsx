@@ -1,32 +1,44 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
+import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
 import { MainLayout } from '@/layouts/MainLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+
+// Eagerly loaded
 import { Login } from '@/pages/Auth/Login';
 import { Dashboard } from '@/pages/Dashboard';
-import { Settings } from '@/pages/Settings';
-import { ComingSoon } from '@/pages/ComingSoon';
-import { CommissionsHub } from '@/pages/Commissions';
-import { OrderCountCommission } from '@/pages/Commissions/OrderCountCommission';
-import { ProductCommission } from '@/pages/Commissions/ProductCommission';
-import { CommissionHistory } from '@/pages/Commissions/History';
-import { CommissionRecords } from '@/pages/Commissions/CommissionRecords';
-import { DailyClosings } from '@/pages/Commissions/Closings';
-import { CommissionReports } from '@/pages/Commissions/Reports';
-import { Employees } from '@/pages/Employees';
-import { Products } from '@/pages/Products';
-import { QuotesPage } from '@/pages/Quotes';
-import { PrivacyPolicy } from '@/pages/PrivacyPolicy';
-import { TermsOfService } from '@/pages/TermsOfService';
+
+// Lazy loaded heavy routes
+const Settings = React.lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })));
+const ComingSoon = React.lazy(() => import('@/pages/ComingSoon').then(m => ({ default: m.ComingSoon })));
+const CommissionsHub = React.lazy(() => import('@/pages/Commissions').then(m => ({ default: m.CommissionsHub })));
+const OrderCountCommission = React.lazy(() => import('@/pages/Commissions/OrderCountCommission').then(m => ({ default: m.OrderCountCommission })));
+const ProductCommission = React.lazy(() => import('@/pages/Commissions/ProductCommission').then(m => ({ default: m.ProductCommission })));
+const CommissionRecords = React.lazy(() => import('@/pages/Commissions/CommissionRecords').then(m => ({ default: m.CommissionRecords })));
+const DailyClosings = React.lazy(() => import('@/pages/Commissions/Closings').then(m => ({ default: m.DailyClosings })));
+const CommissionReports = React.lazy(() => import('@/pages/Commissions/Reports').then(m => ({ default: m.CommissionReports })));
+const Employees = React.lazy(() => import('@/pages/Employees').then(m => ({ default: m.Employees })));
+const Products = React.lazy(() => import('@/pages/Products').then(m => ({ default: m.Products })));
+const QuotesPage = React.lazy(() => import('@/pages/Quotes').then(m => ({ default: m.QuotesPage })));
+
+const SuspenseWrapper = ({ children }: { children: React.ReactNode }) => (
+  <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>}>
+    {children}
+  </Suspense>
+);
+
 
 const router = createBrowserRouter([
+  { path: '*', element: <SuspenseWrapper><ComingSoon /></SuspenseWrapper>, errorElement: <RouteErrorBoundary /> },
   {
     path: '/login',
     element: <Login />,
+    errorElement: <RouteErrorBoundary />,
   },
   {
     path: '/',
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: '/',
@@ -38,51 +50,51 @@ const router = createBrowserRouter([
           },
           {
             path: 'settings',
-            element: <Settings />,
+            element: <SuspenseWrapper><Settings /></SuspenseWrapper>,
           },
           {
             path: 'quotes',
-            element: <QuotesPage />,
+            element: <SuspenseWrapper><QuotesPage /></SuspenseWrapper>,
           },
           {
             path: 'commission',
-            element: <CommissionsHub />,
+            element: <SuspenseWrapper><CommissionsHub /></SuspenseWrapper>,
           },
           {
             path: 'commission/order-count',
-            element: <OrderCountCommission />,
+            element: <SuspenseWrapper><OrderCountCommission /></SuspenseWrapper>,
           },
           {
             path: 'commission/products',
-            element: <ProductCommission />,
+            element: <SuspenseWrapper><ProductCommission /></SuspenseWrapper>,
           },
           {
             path: 'commission/history',
-            element: <CommissionRecords />,
+            element: <SuspenseWrapper><CommissionRecords /></SuspenseWrapper>,
           },
           {
             path: 'commission/records',
-            element: <CommissionRecords />,
+            element: <SuspenseWrapper><CommissionRecords /></SuspenseWrapper>,
           },
           {
             path: 'commission/closings',
-            element: <DailyClosings />,
+            element: <SuspenseWrapper><DailyClosings /></SuspenseWrapper>,
           },
           {
             path: 'commission/reports',
-            element: <CommissionReports />,
+            element: <SuspenseWrapper><CommissionReports /></SuspenseWrapper>,
           },
           {
             path: 'hr',
-            element: <Employees />,
+            element: <SuspenseWrapper><Employees /></SuspenseWrapper>,
           },
           {
             path: 'inventory',
-            element: <Products />,
+            element: <SuspenseWrapper><Products /></SuspenseWrapper>,
           },
           {
             path: '*',
-            element: <ComingSoon />,
+            element: <SuspenseWrapper><ComingSoon /></SuspenseWrapper>,
           },
         ],
       },
