@@ -360,6 +360,8 @@ function doPost(e) {
       case 'SAVE_COMMISSION_RECORD': return responseOk(saveCommissionRecord(payload));
       case 'GET_COMMISSION_RECORDS': return responseOk(getCommissionRecords(payload));
       case 'DELETE_COMMISSION_RECORD': return responseOk(deleteCommissionRecord(payload));
+      case 'RESTORE_RECORD': return responseOk(restoreRecord(payload));
+
 
       // QUOTES
       case 'GET_OFFERS': return handleGetOffers(payload);
@@ -1381,6 +1383,19 @@ function deleteCommissionRecord(payload) {
   lock.waitLock(10000);
   try {
     updateRow('CommissionRecords', 'id', payload.id, { IsDeleted: true });
+    return { success: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function restoreRecord(payload) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const { tableName, idField, idValue } = payload;
+    updateRow(tableName, idField, idValue, { IsDeleted: false });
     return { success: true };
   } finally {
     lock.releaseLock();

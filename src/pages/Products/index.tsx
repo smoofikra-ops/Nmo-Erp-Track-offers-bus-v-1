@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Edit, Trash2, Save, Image as ImageIcon, Link as LinkIcon, RefreshCw, Package } from 'lucide-react';
 import { productService } from '@/services/productService';
+import { archiveService } from '@/services/archiveService';
 import { ApiClient } from '@/services/apiClient';
 import { Product, ProductStatus } from '@/types';
 import { cn } from '@/utils/cn';
@@ -155,7 +156,11 @@ export function Products() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (prod: Product) => productService.deleteProduct(prod.ProductID, companyId),
+    mutationFn: async ({ prod, reason }: { prod: Product, reason: string }) => {
+      const userStr = localStorage.getItem('user');
+      const adminUser = userStr ? JSON.parse(userStr) : { id: 'admin-1', name: 'Admin', role: 'admin' };
+      return archiveService.archiveRecord('PRODUCT', prod, reason, adminUser, companyId);
+    },
     onSuccess: async (res) => {
       if (res.success) await queryClient.invalidateQueries({ queryKey: ['products', companyId] });
     }
@@ -418,8 +423,15 @@ export function Products() {
                     <td className="px-4 py-2 text-center">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Edit className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" className="text-red-500" onClick={() => {
-                        requireAdminAuth('حذف منتج', () => {
-                          if (confirm('تأكيد الحذف؟')) deleteMutation.mutate(p);
+                        requireAdminAuth('أرشفة منتج', () => {
+                          const reason = window.prompt('الرجاء إدخال سبب الأرشفة (مطلوب):');
+                          if (!reason || reason.trim() === '') {
+                            alert('يجب إدخال سبب الأرشفة لإتمام العملية.');
+                            return;
+                          }
+                          if (window.prompt('لتأكيد الأرشفة، اكتب ARCHIVE') === 'ARCHIVE') {
+                            deleteMutation.mutate({ prod: p, reason });
+                          }
                         });
                       }}><Trash2 className="h-4 w-4" /></Button>
                     </td>
@@ -487,7 +499,18 @@ export function Products() {
                     <Button variant="ghost" size="sm" onClick={() => openEdit(p)} className="h-8 text-indigo-600">
                       <Edit className="h-4 w-4 ml-1" /> تعديل
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { if (confirm('تأكيد الحذف؟')) deleteMutation.mutate(p); }} className="h-8 text-red-600">
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      requireAdminAuth('أرشفة منتج', () => {
+                        const reason = window.prompt('الرجاء إدخال سبب الأرشفة (مطلوب):');
+                        if (!reason || reason.trim() === '') {
+                          alert('يجب إدخال سبب الأرشفة لإتمام العملية.');
+                          return;
+                        }
+                        if (window.prompt('لتأكيد الأرشفة، اكتب ARCHIVE') === 'ARCHIVE') {
+                          deleteMutation.mutate({ prod: p, reason });
+                        }
+                      });
+                    }} className="h-8 text-red-600">
                       <Trash2 className="h-4 w-4 ml-1" /> حذف
                     </Button>
                   </div>

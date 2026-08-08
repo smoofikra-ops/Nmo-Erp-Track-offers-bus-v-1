@@ -14,6 +14,8 @@
         "chart.js": "^4.5.1",
         "clsx": "^2.1.1",
         "date-fns": "^4.4.0",
+        "dexie": "^4.4.4",
+        "dexie-react-hooks": "^4.4.0",
         "dotenv": "^17.2.3",
         "express": "^4.21.2",
         "i18next": "^26.3.6",
@@ -401,6 +403,10 @@
     "destroy": ["destroy@1.2.0", "", {}, "sha512-2sJGJTaXIIaR1w4iJSNoN0hnMY7Gpc/n8D4qSCJw8QqFWXf7cuAgnEHxBpweaVcPevC2l3KpjYCx3NypQQgaJg=="],
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
+
+    "dexie": ["dexie@4.4.4", "", {}, "sha512-jIwsYI8Os2hgnqc6O49YwFDKGc5v5QjGx0wPVp543ip1F53VFAKMLthV2pQosQcVTv3eAskTWYspOx195PM0FQ=="],
+
+    "dexie-react-hooks": ["dexie-react-hooks@4.4.0", "", { "peerDependencies": { "dexie": ">=4.2.0-alpha.1 <5.0.0", "react": ">=16" } }, "sha512-ObLXBS5+4BJU8vtSvBx6b9fY6zZYgniAtwxzjCHsUQadgbqYN6935X2/1TWw4Rf2N1aZV1io5/ziox4vKuxABA=="],
 
     "dotenv": ["dotenv@17.4.2", "", {}, "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="],
 

@@ -200,7 +200,7 @@ export function OrderCountCommission() {
     setSavedRecord(null);
   };
 
-  const canProceedToSummary = selectedEmployeeId && newOrdersNum > 0 && numTotalRequired >= 0 && numOnlinePaid >= 0;
+  const canProceedToSummary = selectedEmployeeId && newOrdersNum > 0 && numTotalRequired >= 0 && numOnlinePaid >= 0 && !paymentItems.some(i => /^\d/.test(i.description || ''));
 
   if (empLoading || settingsLoading) {
     return (

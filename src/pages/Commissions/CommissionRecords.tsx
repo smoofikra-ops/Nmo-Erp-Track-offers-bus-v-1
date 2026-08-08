@@ -9,12 +9,28 @@ import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import { hasPermission, RolePermissions } from '@/utils/permissions';
 import { CommissionRecord } from '@/types/commissions';
 import { commissionService } from '@/services/commissionService';
+import { archiveService } from '@/services/archiveService';
 import { PrintableCommissionSummary } from '@/components/commissions/PrintableCommissionSummary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 import { ArrowLeft, Search, TrendingUp, CreditCard, Package, Filter, Eye, Printer, Trash2, Calendar, Lock, Plus, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+
+const getPaymentMethodLabel = (method: string) => {
+  const methods: Record<string, string> = {
+    CASH: 'كاش (نقدي)',
+    ZID: 'مدفوعات زد (ZID)',
+    BALANCE: 'تسوية رصيد',
+    BANK_TRANSFER: 'تحويل بنكي',
+    STC_PAY: 'STC Pay',
+    CREDIT_SALE: 'آجل / ذمم',
+    INTERMEDIARY_ACCOUNT: 'حساب وسيط',
+    OTHER: 'أخرى',
+  };
+  return methods[method] || method;
+};
 
 export function CommissionRecords() {
   const navigate = useNavigate();
@@ -45,8 +61,10 @@ export function CommissionRecords() {
   });
 
   const deleteRecordMutation = useMutation({
-    mutationFn: async (recordId: string) => {
-      await commissionService.deleteCommissionRecord(recordId);
+    mutationFn: async ({ record, reason }: { record: any, reason: string }) => {
+      const userStr = localStorage.getItem('user');
+      const adminUser = userStr ? JSON.parse(userStr) : { id: 'admin-1', name: 'Admin', role: 'admin' };
+      await archiveService.archiveRecord('COMMISSION_RECORD', record, reason, adminUser, 'COM-0001');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
@@ -57,11 +75,18 @@ export function CommissionRecords() {
     }
   });
 
-  const handleDelete = (recordId: string, e: React.MouseEvent) => {
+  const handleDelete = (record: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    requireAdminAuth('حذف سجل عمولة نهائياً', () => {
-      if (window.confirm('هل أنت متأكد من حذف هذا السجل نهائياً؟ لا يمكن التراجع عن هذا الإجراء.')) {
-        deleteRecordMutation.mutate(recordId);
+    requireAdminAuth('أرشفة سجل العمولة', () => {
+      const reason = window.prompt('الرجاء إدخال سبب الأرشفة (مطلوب):');
+      if (!reason || reason.trim() === '') {
+        alert('يجب إدخال سبب الأرشفة لإتمام العملية.');
+        return;
+      }
+      if (window.prompt('لتأكيد الأرشفة، اكتب ARCHIVE') === 'ARCHIVE') {
+        deleteRecordMutation.mutate({ record, reason });
+      } else {
+        alert('تم إلغاء الأرشفة.');
       }
     });
   };

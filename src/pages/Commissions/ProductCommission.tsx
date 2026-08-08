@@ -168,7 +168,7 @@ export function ProductCommission() {
     setSavedRecord(null);
   };
 
-  const canProceedToSummary = selectedEmployeeId && totalProductsCount > 0 && numTotalRequired >= 0 && numOnlinePaid >= 0;
+  const canProceedToSummary = selectedEmployeeId && totalProductsCount > 0 && numTotalRequired >= 0 && numOnlinePaid >= 0 && !paymentItems.some(i => /^\d/.test(i.description || ''));
 
   if (empLoading || prodLoading) {
     return (

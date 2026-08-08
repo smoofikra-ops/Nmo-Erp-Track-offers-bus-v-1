@@ -28,6 +28,8 @@ import { SecurityTab } from "./Tabs/SecurityTab";
 import { InventoryTab } from "./Tabs/InventoryTab";
 import { CommissionTab } from "./Tabs/CommissionTab";
 import { UsersTab } from "./Tabs/UsersTab";
+import { ArchiveCenterTab } from "./Tabs/ArchiveCenterTab";
+import { Archive } from "lucide-react";
 import { BackupTab } from "./Tabs/BackupTab";
 import { SystemHealth } from "./SystemHealth";
 
@@ -41,6 +43,7 @@ const tabs = [
   { id: "users", label: "المستخدمون والصلاحيات", icon: Users },
   { id: "security", label: "أمان الإعدادات", icon: Lock },
   { id: "backup", label: "النسخ الاحتياطي", icon: Database },
+  { id: "archive", label: "مركز الأرشيف", icon: Archive },
   { id: "health", label: "صحة النظام", icon: Activity },
 ];
 
@@ -137,6 +140,10 @@ export function Settings() {
         return <SecurityTab />;
       case "backup":
         return <BackupTab />;
+      
+      case "archive":
+        return <ArchiveCenterTab />;
+
       case "health":
         return <SystemHealth />;
       default:

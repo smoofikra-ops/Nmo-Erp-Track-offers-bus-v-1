@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Edit, Trash2, RotateCcw, AlertCircle, Save } from 'lucide-react';
 import { employeeService } from '@/services/employeeService';
+import { archiveService } from '@/services/archiveService';
 import { Employee, EmployeeStatus, CommissionType } from '@/types';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/contexts/AuthContext';
@@ -114,7 +115,11 @@ export function Employees() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (emp: Employee) => employeeService.deleteEmployee(emp.EmployeeID, companyId),
+    mutationFn: async ({ emp, reason }: { emp: Employee, reason: string }) => {
+      const userStr = localStorage.getItem('user');
+      const adminUser = userStr ? JSON.parse(userStr) : { id: 'admin-1', name: 'Admin', role: 'admin' };
+      return archiveService.archiveRecord('EMPLOYEE', emp, reason, adminUser, companyId);
+    },
     onSuccess: async (res) => {
       if (res.success) {
         toast.success('تم حذف الموظف بنجاح.');
@@ -166,8 +171,17 @@ export function Employees() {
   };
 
   const handleDelete = (emp: Employee) => {
-    requireAdminAuth('حذف الموظف', () => {
-      setEmployeeToDelete(emp);
+    requireAdminAuth('أرشفة الموظف', () => {
+      const reason = window.prompt('الرجاء إدخال سبب الأرشفة (مطلوب):');
+      if (!reason || reason.trim() === '') {
+        alert('يجب إدخال سبب الأرشفة لإتمام العملية.');
+        return;
+      }
+      if (window.prompt('لتأكيد الأرشفة، اكتب ARCHIVE') === 'ARCHIVE') {
+        deleteMutation.mutate({ emp, reason });
+      } else {
+        alert('تم إلغاء الأرشفة.');
+      }
     });
   };
   const confirmDelete = () => {

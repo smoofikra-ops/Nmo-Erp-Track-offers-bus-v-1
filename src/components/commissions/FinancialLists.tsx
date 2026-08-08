@@ -81,6 +81,50 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'OTHER', label: 'أخرى' },
 ];
 
+
+function FormattedAmountInput({ value, onChange, placeholder, className }: { value: number, onChange: (val: number) => void, placeholder: string, className: string }) {
+  const [localVal, setLocalVal] = React.useState(value ? value.toLocaleString('en-US') : '');
+
+  React.useEffect(() => {
+    const numericLocal = parseFloat(localVal.replace(/,/g, '')) || 0;
+    if (numericLocal !== (value || 0)) {
+      setLocalVal(value ? value.toLocaleString('en-US') : '');
+    }
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^0-9.,]/g, '');
+    setLocalVal(raw);
+    
+    const numericStr = raw.replace(/,/g, '');
+    const num = parseFloat(numericStr);
+    if (!isNaN(num)) {
+      onChange(num);
+    } else if (raw === '') {
+      onChange(0);
+    }
+  };
+
+  const handleBlur = () => {
+    const numericStr = localVal.replace(/,/g, '');
+    const num = parseFloat(numericStr);
+    if (!isNaN(num)) {
+      setLocalVal(num.toLocaleString('en-US'));
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      className={className}
+      value={localVal}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+    />
+  );
+}
+
 export function PaymentList({ items, onChange }: PaymentListProps) {
   const handleAdd = () => {
     onChange([...items, { id: Date.now().toString(), method: 'CASH', description: '', amount: 0 }]);
@@ -102,51 +146,86 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
           <Plus className="w-3 h-3 mr-1" /> إضافة دفعة
         </Button>
       </div>
+
       {items.length === 0 ? (
         <p className="text-xs text-slate-400 text-center py-4 border rounded border-dashed bg-slate-50">لا توجد دفعات أو تسويات.</p>
       ) : (
-        <div className="space-y-2">
-          {items.map(item => (
-            <div key={item.id} className="flex gap-2 items-center bg-white p-2 rounded border border-slate-200 shadow-sm">
-              <select
-                className="w-32 p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500 bg-white"
-                value={item.method}
-                onChange={(e) => updateItem(item.id, 'method', e.target.value)}
-              >
-                {PAYMENT_METHODS.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                className="flex-1 p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500"
-                value={item.description || ''}
-                onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                placeholder={item.method === 'OTHER' ? 'مطلوب وصف للدفعة' : 'وصف الدفعة (اختياري)'}
-              />
-              <input
-                type="number"
-                min="0"
-                className="w-24 p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500"
-                value={item.amount || ''}
-                onChange={(e) => updateItem(item.id, 'amount', Number(e.target.value))}
-                placeholder="المبلغ"
-              />
-              <button onClick={() => handleRemove(item.id)} className="text-red-500 hover:text-red-700 p-2 rounded-md hover:bg-red-50 transition-colors">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-          <div className="flex justify-between items-center pt-2 px-1 text-sm">
+        <div className="space-y-4 md:space-y-2">
+          {/* Header row for desktop */}
+          <div className="hidden md:flex gap-2 px-2 text-xs font-semibold text-slate-500">
+            <div style={{ width: '30%' }}>Payment Type</div>
+            <div style={{ width: '45%' }}>Description (Optional)</div>
+            <div style={{ width: '25%' }}>Collected Amount</div>
+            <div className="w-8"></div>
+          </div>
+
+          {items.map(item => {
+            const isDescInvalid = /^\d/.test(item.description || '');
+            
+            return (
+              <div key={item.id} className="flex flex-col md:flex-row gap-2 md:items-start bg-white p-3 md:p-2 rounded-lg border border-slate-200 shadow-sm relative">
+                
+                {/* Payment Type */}
+                <div className="w-full md:w-[30%]">
+                  <label className="block md:hidden text-xs text-slate-500 mb-1">Payment Type</label>
+                  <select
+                    className="w-full p-2.5 md:p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500 bg-white"
+                    value={item.method}
+                    onChange={(e) => updateItem(item.id, 'method', e.target.value)}
+                  >
+                    {PAYMENT_METHODS.map(m => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Description */}
+                <div className="w-full md:w-[45%]">
+                  <label className="block md:hidden text-xs text-slate-500 mb-1">Description (Optional)</label>
+                  <input
+                    type="text"
+                    className={`w-full p-2.5 md:p-2 rounded-md border text-sm outline-none ${isDescInvalid ? 'border-red-400 focus:border-red-500 bg-red-50 text-red-900' : 'border-slate-300 focus:border-indigo-500'}`}
+                    value={item.description || ''}
+                    onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                    placeholder="Example: Invoice #1058"
+                  />
+                  {isDescInvalid && (
+                    <p className="text-red-500 text-xs mt-1">This field is for description only.</p>
+                  )}
+                </div>
+
+                {/* Amount */}
+                <div className="w-full md:w-[25%] flex items-start gap-2">
+                  <div className="flex-1">
+                    <label className="block md:hidden text-xs text-slate-500 mb-1">Collected Amount</label>
+                    <FormattedAmountInput
+                      value={item.amount || 0}
+                      onChange={(val) => updateItem(item.id, 'amount', val)}
+                      placeholder="Example: 250.00 SAR"
+                      className="w-full p-2.5 md:p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  
+                  <button 
+                    onClick={() => handleRemove(item.id)} 
+                    className="mt-6 md:mt-0 text-red-500 hover:text-red-700 p-2.5 md:p-2 rounded-md hover:bg-red-50 transition-colors shrink-0"
+                    title="حذف الدفعة"
+                  >
+                    <Trash2 className="w-5 h-5 md:w-4 md:h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex justify-between items-center pt-3 px-2 text-sm border-t border-slate-100">
              <span className="font-bold text-slate-700">الإجمالي:</span>
-             <span className="font-bold text-slate-900">{items.reduce((s, i) => s + (Number(i.amount)||0), 0).toFixed(2)} ر.س</span>
+             <span className="font-bold text-indigo-700 text-base">{items.reduce((s, i) => s + (Number(i.amount)||0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</span>
           </div>
         </div>
       )}
     </div>
   );
 }
-
 interface DiscountListProps {
   items: DiscountItem[];
   onChange: (items: DiscountItem[]) => void;
