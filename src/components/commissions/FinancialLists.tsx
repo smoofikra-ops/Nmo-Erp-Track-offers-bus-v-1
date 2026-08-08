@@ -153,9 +153,9 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
         <div className="space-y-4 md:space-y-2">
           {/* Header row for desktop */}
           <div className="hidden md:flex gap-2 px-2 text-xs font-semibold text-slate-500">
-            <div style={{ width: '30%' }}>Payment Type</div>
-            <div style={{ width: '45%' }}>Description (Optional)</div>
-            <div style={{ width: '25%' }}>Collected Amount</div>
+            <div style={{ width: '25%' }}>Payment Type</div>
+            <div style={{ width: '40%' }}>Description (Optional)</div>
+            <div style={{ width: '35%' }}>Collected Amount</div>
             <div className="w-8"></div>
           </div>
 
@@ -166,7 +166,7 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
               <div key={item.id} className="flex flex-col md:flex-row gap-2 md:items-start bg-white p-3 md:p-2 rounded-lg border border-slate-200 shadow-sm relative">
                 
                 {/* Payment Type */}
-                <div className="w-full md:w-[30%]">
+                <div className="w-full md:w-[25%]">
                   <label className="block md:hidden text-xs text-slate-500 mb-1">Payment Type</label>
                   <select
                     className="w-full p-2.5 md:p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500 bg-white"
@@ -180,7 +180,7 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
                 </div>
 
                 {/* Description */}
-                <div className="w-full md:w-[45%]">
+                <div className="w-full md:w-[40%]">
                   <label className="block md:hidden text-xs text-slate-500 mb-1">Description (Optional)</label>
                   <input
                     type="text"
@@ -195,7 +195,7 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
                 </div>
 
                 {/* Amount */}
-                <div className="w-full md:w-[25%] flex items-start gap-2">
+                <div className="w-full md:w-[35%] flex items-start gap-2">
                   <div className="flex-1">
                     <label className="block md:hidden text-xs text-slate-500 mb-1">Collected Amount</label>
                     <FormattedAmountInput
