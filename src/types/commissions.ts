@@ -86,4 +86,47 @@ export interface CommissionRecord {
     tier2Count: number;
     tier2Rate: number;
   };
+
+  revisions?: CommissionRevision[];
+  auditLogs?: CommissionAuditLog[];
+  version?: number;
+  lastModifiedBy?: {
+    id: string;
+    name: string;
+  };
+  lastModifiedAt?: string;
+}
+
+export interface CommissionRevision {
+  version: number;
+  editedBy: {
+    id: string;
+    name: string;
+    role: string;
+  };
+  editedAt: string;
+  editReason: string;
+  changes: {
+    field: string;
+    oldValue: any;
+    newValue: any;
+  }[];
+  previousRecord: Partial<CommissionRecord>;
+}
+
+export interface CommissionAuditLog {
+  auditId: string;
+  transactionId: string;
+  date: string; // ISO
+  userName: string;
+  userId: string;
+  userRole: string;
+  deviceInfo: {
+    device?: string;
+    browser?: string;
+    os?: string;
+    userAgent: string;
+  };
+  ipAddress?: string;
+  editReason: string;
 }

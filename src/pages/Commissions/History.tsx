@@ -57,7 +57,7 @@ export function CommissionHistory() {
                   <td className="px-6 py-4 font-medium">{r.ReceiptNumber}</td>
                   <td className="px-6 py-4">{r.ReceiptDate?.split('T')[0]}</td>
                   <td className="px-6 py-4">{r.CommissionSystem}</td>
-                  <td className="px-6 py-4 font-medium text-emerald-600">{r.NetCommission} SAR</td>
+                  <td className="px-6 py-4 font-medium text-emerald-600">{r.NetCommission} ر.س</td>
                   <td className="px-6 py-4">
                     <span className="bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-xs font-medium">
                       {r.Status}

@@ -4,7 +4,7 @@ import { archiveService } from '@/services/archiveService';
 import { AuditLogEntry, ArchivedRecord } from '@/db/archiveDb';
 import { Button } from '@/components/ui/button';
 
-import { Search, RotateCcw, Download, FileText, AlertTriangle, User, Calendar, Database } from 'lucide-react';
+import { Search, Loader2, RotateCcw, Download, FileText, AlertTriangle, User, Calendar, Database } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';

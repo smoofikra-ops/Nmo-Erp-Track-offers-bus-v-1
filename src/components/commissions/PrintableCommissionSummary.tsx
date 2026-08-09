@@ -249,11 +249,11 @@ export function PrintableCommissionSummary({
                   <span className="font-mono font-bold text-slate-900">{totalRequired.toFixed(2)} ر.س</span>
                 </div>
                 <div className="flex justify-between items-center text-blue-700">
-                  <span className="font-bold">(-) إجمالي المدفوعات والتسويات (Payments & Settlements):</span>
+                  <span className="font-bold">(-) إجمالي المدفوعات والتسويات :</span>
                   <span className="font-mono font-bold">-{onlinePaid.toFixed(2)} ر.س</span>
                 </div>
                 <div className="flex justify-between items-center text-rose-600">
-                  <span className="font-bold">(-) إجمالي الخصومات (Discounts):</span>
+                  <span className="font-bold">(-) إجمالي الخصومات :</span>
                   <span className="font-mono font-bold">-{discount.toFixed(2)} ر.س</span>
                 </div>
                 <div className="border-t border-slate-300 my-1"></div>

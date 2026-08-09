@@ -33,6 +33,9 @@ export const commissionService = {
   saveCommissionRecord: (record: any): Promise<ApiResponse<any>> => {
     return ApiClient.post('SAVE_COMMISSION_RECORD', { record });
   },
+  updateCommissionRecord: (record: any): Promise<ApiResponse<any>> => {
+    return ApiClient.post('UPDATE_COMMISSION_RECORD', { record });
+  },
 
   deleteCommissionRecord: (id: string): Promise<ApiResponse<any>> => {
     return ApiClient.post('DELETE_COMMISSION_RECORD', { id });

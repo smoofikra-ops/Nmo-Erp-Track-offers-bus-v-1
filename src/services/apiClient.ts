@@ -2,8 +2,8 @@ import { ApiResponse } from "@/types/responses";
 
 // Try to get URL from import.meta.env, fallback to the known URL if missing during dev
 const GAS_URL =
-  (import.meta as any).env.VITE_GAS_WEBAPP_URL ||
-  "https://script.google.com/macros/s/AKfycbxRRVZ-bgzFZwbhqqEMxQF_sjnmPC0oEQwqpQDWXHZPzlc12o6CZEHohzZF8OzECp6s/exec";
+  (typeof process !== 'undefined' ? process.env.VITE_GAS_WEBAPP_URL : ((import.meta as any).env && (import.meta as any).env.VITE_GAS_WEBAPP_URL)) ||
+  "https://script.google.com/macros/s/AKfycbzEsIMtuEO333KPSe607kKJ7OuHjzuJ42-0vKvTOJQOHKUGkFI3fAomDx7_PY-y1WVp/exec";
 
 export class ApiClient {
   private static async request<T>(

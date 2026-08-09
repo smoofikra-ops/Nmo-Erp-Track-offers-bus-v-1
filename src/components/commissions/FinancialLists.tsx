@@ -9,6 +9,7 @@ interface RequiredAmountListProps {
 }
 
 export function RequiredAmountList({ items, onChange }: RequiredAmountListProps) {
+  items = items || [];
   const handleAdd = () => {
     onChange([...items, { id: Date.now().toString(), description: '', amount: 0 }]);
   };
@@ -126,6 +127,7 @@ function FormattedAmountInput({ value, onChange, placeholder, className }: { val
 }
 
 export function PaymentList({ items, onChange }: PaymentListProps) {
+  items = items || [];
   const handleAdd = () => {
     onChange([...items, { id: Date.now().toString(), method: 'CASH', description: '', amount: 0 }]);
   };
@@ -152,22 +154,21 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
       ) : (
         <div className="space-y-4 md:space-y-2">
           {/* Header row for desktop */}
-          <div className="hidden md:flex gap-2 px-2 text-xs font-semibold text-slate-500">
-            <div style={{ width: '25%' }}>Payment Type</div>
-            <div style={{ width: '40%' }}>Description (Optional)</div>
-            <div style={{ width: '35%' }}>Collected Amount</div>
-            <div className="w-8"></div>
+          <div className="hidden md:flex gap-2 px-2 text-xs font-semibold text-slate-500 text-right">
+            <div style={{ width: '30%' }}>نوع العملية</div>
+            <div style={{ width: '30%' }}>وصف العملية (اختياري)</div>
+            <div style={{ width: '40%' }}>المبلغ المطلوب</div>
+            <div className="w-8 shrink-0"></div>
           </div>
-
           {items.map(item => {
-            const isDescInvalid = /^\d/.test(item.description || '');
+            const isDescInvalid = /^\d+(\.\d+)?$/.test((item.description || '').trim());
             
             return (
               <div key={item.id} className="flex flex-col md:flex-row gap-2 md:items-start bg-white p-3 md:p-2 rounded-lg border border-slate-200 shadow-sm relative">
                 
                 {/* Payment Type */}
-                <div className="w-full md:w-[25%]">
-                  <label className="block md:hidden text-xs text-slate-500 mb-1">Payment Type</label>
+                <div className="w-full md:w-[30%]">
+                  <label className="block md:hidden text-xs text-slate-500 mb-1">نوع العملية</label>
                   <select
                     className="w-full p-2.5 md:p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500 bg-white"
                     value={item.method}
@@ -180,34 +181,37 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
                 </div>
 
                 {/* Description */}
-                <div className="w-full md:w-[40%]">
-                  <label className="block md:hidden text-xs text-slate-500 mb-1">Description (Optional)</label>
+                <div className="w-full md:w-[30%]">
+                  <label className="block md:hidden text-xs text-slate-500 mb-1">وصف العملية (اختياري)</label>
                   <input
                     type="text"
                     className={`w-full p-2.5 md:p-2 rounded-md border text-sm outline-none ${isDescInvalid ? 'border-red-400 focus:border-red-500 bg-red-50 text-red-900' : 'border-slate-300 focus:border-indigo-500'}`}
                     value={item.description || ''}
                     onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                    placeholder="Example: Invoice #1058"
+                    placeholder="مثال: تسوية فاتورة رقم 1058"
                   />
                   {isDescInvalid && (
-                    <p className="text-red-500 text-xs mt-1">This field is for description only.</p>
+                    <p className="text-red-500 text-xs mt-1">هذا الحقل مخصص لوصف العملية فقط، أدخل المبلغ في حقل المبلغ المطلوب.</p>
                   )}
                 </div>
 
                 {/* Amount */}
-                <div className="w-full md:w-[35%] flex items-start gap-2">
+                <div className="w-full md:w-[40%] flex items-start gap-2">
                   <div className="flex-1">
-                    <label className="block md:hidden text-xs text-slate-500 mb-1">Collected Amount</label>
-                    <FormattedAmountInput
-                      value={item.amount || 0}
-                      onChange={(val) => updateItem(item.id, 'amount', val)}
-                      placeholder="Example: 250.00 SAR"
-                      className="w-full p-2.5 md:p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500"
-                    />
+                    <label className="block md:hidden text-xs text-slate-500 mb-1">المبلغ المطلوب</label>
+                    <div className="flex items-center gap-2 w-full p-2 rounded-md border-2 border-slate-300 focus-within:border-indigo-600 focus-within:bg-indigo-50 bg-white shadow-sm transition-colors overflow-hidden">
+                      <FormattedAmountInput
+                        value={item.amount || 0}
+                        onChange={(val) => updateItem(item.id, 'amount', val)}
+                        placeholder="0.00"
+                        className="w-full text-lg font-bold text-indigo-700 outline-none bg-transparent tabular-nums text-left"
+                      />
+                      <span className="text-sm font-bold text-slate-500 shrink-0 select-none">ر.س</span>
+                    </div>
                   </div>
                   
                   <button 
-                    onClick={() => handleRemove(item.id)} 
+                    onClick={() => handleRemove(item.id)}
                     className="mt-6 md:mt-0 text-red-500 hover:text-red-700 p-2.5 md:p-2 rounded-md hover:bg-red-50 transition-colors shrink-0"
                     title="حذف الدفعة"
                   >
@@ -232,6 +236,7 @@ interface DiscountListProps {
 }
 
 export function DiscountList({ items, onChange }: DiscountListProps) {
+  items = items || [];
   const handleAdd = () => {
     onChange([...items, { id: Date.now().toString(), description: 'ZID', amount: 0 }]);
   };

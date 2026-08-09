@@ -11,10 +11,12 @@ import { CommissionRecord } from '@/types/commissions';
 import { commissionService } from '@/services/commissionService';
 import { archiveService } from '@/services/archiveService';
 import { PrintableCommissionSummary } from '@/components/commissions/PrintableCommissionSummary';
+import { EditCommissionRecordModal } from '@/components/commissions/EditCommissionRecordModal';
+import { archiveDb } from '@/db/archiveDb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
-import { ArrowLeft, Search, TrendingUp, CreditCard, Package, Filter, Eye, Printer, Trash2, Calendar, Lock, Plus, FileText } from 'lucide-react';
+import { ArrowLeft, Search, TrendingUp, CreditCard, Package, Filter, Eye, Printer, Trash2, Calendar, Lock, Plus, FileText, Edit2, History } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 
@@ -32,7 +34,21 @@ const getPaymentMethodLabel = (method: string) => {
   return methods[method] || method;
 };
 
+
+const safeParseArray = (data: any) => {
+  if (Array.isArray(data)) return data;
+  if (typeof data === 'string') {
+    if (!data.trim()) return [];
+    try {
+      return JSON.parse(data);
+    } catch(e) { return []; }
+  }
+  return [];
+};
+
 export function CommissionRecords() {
+
+  
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -49,6 +65,7 @@ export function CommissionRecords() {
   const [viewRecordModal, setViewRecordModal] = useState<CommissionRecord | null>(null);
   const [selectedRecordForPrint, setSelectedRecordForPrint] = useState<CommissionRecord | null>(null);
   const [financialAccessGranted, setFinancialAccessGranted] = useState(false);
+  const [editRecordModal, setEditRecordModal] = useState<CommissionRecord | null>(null);
   
   const canViewFinancials = user ? (hasPermission(user.role, RolePermissions.CAN_VIEW_FINANCIAL_SUMMARY) || financialAccessGranted) : false;
 
@@ -60,10 +77,77 @@ export function CommissionRecords() {
     },
   });
 
+  
+  const updateMutation = useMutation({
+    mutationFn: async ({ updatedRecord, reason }: { updatedRecord: CommissionRecord, reason: string }) => {
+      return commissionService.updateCommissionRecord(updatedRecord);
+    },
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success('تم التعديل بنجاح.');
+        setEditRecordModal(null);
+        queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
+      } else {
+        toast.error('فشل التعديل');
+      }
+    },
+    onError: (e: any) => {
+      toast.error('خطأ: ' + e.message);
+    }
+  });
+
+  const handleSaveEdit = async (updatedRecord: CommissionRecord, reason: string) => {
+    const userStr = localStorage.getItem('user');
+    let adminUser = { id: 'admin-1', name: 'Admin', role: 'admin' };
+    try {
+      if (userStr && userStr !== "undefined") adminUser = JSON.parse(userStr);
+    } catch(e) {}
+    
+    const deviceInfo = {
+      userAgent: navigator.userAgent,
+      browser: (navigator as any).userAgentData?.brands?.[0]?.brand || 'Unknown',
+      os: (navigator as any).userAgentData?.platform || 'Unknown',
+      deviceName: 'Web Browser'
+    };
+
+    const auditLog = {
+      id: 'AUDIT-' + Date.now(),
+      timestamp: new Date().toISOString(),
+      adminUsername: adminUser.name,
+      adminUserId: adminUser.id,
+      userRole: adminUser.role,
+      deviceName: deviceInfo.deviceName,
+      browser: deviceInfo.browser,
+      os: deviceInfo.os,
+      ipAddress: 'Logged by system',
+      userAgent: deviceInfo.userAgent,
+      archiveReason: 'Edit: ' + reason,
+      recordsCount: 1,
+      recordIds: [updatedRecord.id],
+      entityType: 'COMMISSION_RECORD',
+      action: 'UPDATE'
+    };
+    
+    return new Promise<void>((resolve, reject) => {
+      updateMutation.mutate({ updatedRecord, reason }, {
+        onSuccess: async () => {
+          try {
+            await archiveDb.auditLogs.add(auditLog as any);
+          } catch(e) { console.error(e); }
+          resolve();
+        },
+        onError: (err) => reject(err)
+      });
+    });
+  };
+
   const deleteRecordMutation = useMutation({
     mutationFn: async ({ record, reason }: { record: any, reason: string }) => {
       const userStr = localStorage.getItem('user');
-      const adminUser = userStr ? JSON.parse(userStr) : { id: 'admin-1', name: 'Admin', role: 'admin' };
+      let adminUser = { id: 'admin-1', name: 'Admin', role: 'admin' };
+    try {
+      if (userStr && userStr !== "undefined") adminUser = JSON.parse(userStr);
+    } catch(e) {}
       await archiveService.archiveRecord('COMMISSION_RECORD', record, reason, adminUser, 'COM-0001');
     },
     onSuccess: () => {
@@ -346,8 +430,18 @@ export function CommissionRecords() {
                               <Eye className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => setSelectedRecordForPrint(r)}>
-                              <Printer className="h-4 w-4" />
-                            </Button>
+    <Printer className="h-4 w-4" />
+  </Button>
+  {canViewFinancials && (
+    <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:text-indigo-800" onClick={(e) => {
+      e.stopPropagation();
+      requireAdminAuth('تعديل سجل العمولة', () => {
+        setEditRecordModal(r);
+      });
+    }}>
+      <Edit2 className="h-4 w-4" />
+    </Button>
+  )}
                             {canViewFinancials && (
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={(e) => handleDelete(r.id, e)}>
                                 <Trash2 className="h-4 w-4" />
@@ -378,6 +472,9 @@ export function CommissionRecords() {
                       <div className="flex justify-between items-start">
                         <div>
                           <span className="font-mono font-bold text-emerald-700">{r.transactionNo}</span>
+  {safeParseArray(r.revisions).length > 0 && (
+    <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded mr-2 block w-fit mt-1">معدل</span>
+  )}
                           <span className="block text-slate-500 text-[10px] mt-0.5">{r.formattedDate}</span>
                         </div>
                         <div className="text-left">
@@ -417,8 +514,18 @@ export function CommissionRecords() {
                           <Eye className="h-4 w-4 ml-2" /> التفاصيل
                         </Button>
                         <Button variant="outline" size="sm" className="h-8 text-emerald-600 w-full" onClick={(e) => { e.stopPropagation(); setSelectedRecordForPrint(r); }}>
-                          <Printer className="h-4 w-4 ml-2" /> طباعة
-                        </Button>
+    <Printer className="h-4 w-4 ml-2" /> طباعة
+  </Button>
+  {canViewFinancials && (
+    <Button variant="outline" size="sm" className="h-8 text-indigo-600 w-full col-span-2" onClick={(e) => { 
+      e.stopPropagation();
+      requireAdminAuth('تعديل سجل العمولة', () => {
+        setEditRecordModal(r);
+      });
+    }}>
+      <Edit2 className="h-4 w-4 ml-2" /> تعديل
+    </Button>
+  )}
                       </div>
                     </div>
                   ))}
@@ -513,7 +620,21 @@ export function CommissionRecords() {
         </div>
       )}
 
-      {/* Printable Summary Modal */}
+      {editRecordModal && (
+    <EditCommissionRecordModal
+      record={editRecordModal}
+      onClose={() => setEditRecordModal(null)}
+      onSave={handleSaveEdit}
+      adminUser={(() => {
+        const userStr = localStorage.getItem('user');
+        let admin = { id: 'admin-1', name: 'Admin', role: 'admin' };
+        try { if (userStr && userStr !== "undefined") { const parsed = JSON.parse(userStr); if (parsed.id) admin = parsed; } } catch(e){}
+        return admin;
+      })()}
+    />
+  )}
+  
+            {/* Printable Summary Modal */}
       {selectedRecordForPrint && (
         <PrintableCommissionSummary
           record={selectedRecordForPrint}

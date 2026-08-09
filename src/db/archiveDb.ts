@@ -15,7 +15,7 @@ export interface AuditLogEntry {
   recordsCount: number;
   recordIds: string[];
   entityType: string;
-  action: 'ARCHIVE' | 'RESTORE';
+  action: 'ARCHIVE' | 'RESTORE' | 'UPDATE';
 }
 
 export interface ArchivedRecord {
