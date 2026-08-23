@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { Breadcrumb } from './Breadcrumb';
+import { NotificationCenter } from './Notifications/NotificationCenter';
 import { User, LogOut, Building, ArrowLeftRight, Menu } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '@/utils/cn';
@@ -44,6 +45,8 @@ export function Header() {
           </Button>
 
           <LanguageSwitcher />
+
+          <NotificationCenter />
           
           {user && user.companies.length > 1 && (
              <div className="flex items-center gap-2 border-r pr-4 rtl:border-l rtl:border-r-0 rtl:pl-4 rtl:pr-0 border-slate-200">

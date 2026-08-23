@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
+import { FloatingAIAssistant } from '@/components/AIAssistant/FloatingAIAssistant';
 import { useSidebar } from '@/contexts/SidebarContext';
 import { cn } from '@/utils/cn';
 
@@ -9,7 +10,7 @@ export function MainLayout() {
   const { isPinned } = useSidebar();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
       <Sidebar />
       <div className={cn(
         "flex flex-1 flex-col transition-[padding] duration-200 ease-in-out min-w-0",
@@ -22,6 +23,7 @@ export function MainLayout() {
           </div>
         </main>
       </div>
+      <FloatingAIAssistant />
     </div>
   );
 }

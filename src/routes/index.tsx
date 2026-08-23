@@ -22,6 +22,7 @@ const Products = React.lazy(() => import('@/pages/Products').then(m => ({ defaul
 const QuotesPage = React.lazy(() => import('@/pages/Quotes').then(m => ({ default: m.QuotesPage })));
 const Fleet = React.lazy(() => import('@/pages/Fleet').then(m => ({ default: m.default })));
 const ReportsPage = React.lazy(() => import('@/pages/Reports').then(m => ({ default: m.ReportsPage })));
+const AIAssistantPage = React.lazy(() => import('@/pages/AIAssistant').then(m => ({ default: m.AIAssistantPage })));
 
 const SuspenseWrapper = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>}>
@@ -105,6 +106,10 @@ const router = createBrowserRouter([
           {
             path: 'reports',
             element: <SuspenseWrapper><ReportsPage /></SuspenseWrapper>,
+          },
+          {
+            path: 'ai-assistant',
+            element: <SuspenseWrapper><AIAssistantPage /></SuspenseWrapper>,
           },
           {
             path: '*',

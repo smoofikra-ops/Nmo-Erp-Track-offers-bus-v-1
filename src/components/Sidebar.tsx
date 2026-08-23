@@ -10,6 +10,7 @@ import {
   BarChart,
   Settings,
   FileText,
+  Sparkles,
   X,
   Pin,
   PinOff,
@@ -114,6 +115,12 @@ export function Sidebar() {
       to: "/reports",
       icon: BarChart,
       label: t("modules.reports", "التقارير"),
+      exact: false,
+    },
+    {
+      to: "/ai-assistant",
+      icon: Sparkles,
+      label: "مساعد ريجين الذكي",
       exact: false,
     },
   ];
