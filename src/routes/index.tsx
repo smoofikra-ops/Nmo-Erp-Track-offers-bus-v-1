@@ -20,6 +20,8 @@ const CommissionReports = React.lazy(() => import('@/pages/Commissions/Reports')
 const Employees = React.lazy(() => import('@/pages/Employees').then(m => ({ default: m.Employees })));
 const Products = React.lazy(() => import('@/pages/Products').then(m => ({ default: m.Products })));
 const QuotesPage = React.lazy(() => import('@/pages/Quotes').then(m => ({ default: m.QuotesPage })));
+const Fleet = React.lazy(() => import('@/pages/Fleet').then(m => ({ default: m.default })));
+const ReportsPage = React.lazy(() => import('@/pages/Reports').then(m => ({ default: m.ReportsPage })));
 
 const SuspenseWrapper = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<div className="flex h-screen items-center justify-center"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>}>
@@ -91,6 +93,18 @@ const router = createBrowserRouter([
           {
             path: 'inventory',
             element: <SuspenseWrapper><Products /></SuspenseWrapper>,
+          },
+          {
+            path: 'fleet',
+            element: <SuspenseWrapper><Fleet /></SuspenseWrapper>,
+          },
+          {
+            path: 'vehicles',
+            element: <SuspenseWrapper><Fleet /></SuspenseWrapper>,
+          },
+          {
+            path: 'reports',
+            element: <SuspenseWrapper><ReportsPage /></SuspenseWrapper>,
           },
           {
             path: '*',

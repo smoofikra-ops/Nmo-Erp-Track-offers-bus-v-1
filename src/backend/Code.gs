@@ -114,6 +114,39 @@ const SCHEMA = {
     "MonthlyClosingID", "CompanyID", "EmployeeID", "ClosingYear", "ClosingMonth", "TotalOrders", 
     "GrossCommission", "TotalDiscounts", "NetCommission", "TotalRequiredAmount", 
     "TotalPaidInvoices", "FinalBalance", "Status", "ClosedAt", "ClosedBy", "CreatedAt", "UpdatedAt"
+  ],
+  Vehicles: [
+    "Vehicle_ID", "CompanyID", "Plate_Number", "Plate_Letters", "Plate_Numbers", "Make", "Brand", "Model", 
+    "Year", "Color", "Vehicle_Type", "Fuel_Type", "Tank_Capacity", "Current_Odometer", "Primary_Driver_ID", 
+    "Primary_Driver_Name", "Secondary_Driver_ID", "Secondary_Driver_Name", "Operational_Status", "Ownership_Type", 
+    "Branch", "Location", "Chassis_Number", "VIN", "Engine_Number", "Notes", "Readiness_Score", "Readiness_Reasons", 
+    "Insurance_Expiry", "Inspection_Expiry", "Registration_Expiry", "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted", "DeletedAt", "DeletedBy"
+  ],
+  Fleet_Fuel_Logs: [
+    "Log_ID", "CompanyID", "Vehicle_ID", "Driver_ID", "Driver_Name", "Date", "Odometer", "Previous_Odometer", 
+    "Liters", "Fuel_Cost", "Cost_Per_Liter", "Fuel_Type", "Station_Name", "Invoice_Number", "Receipt_Image_URL", 
+    "Notes", "Distance_Traveled", "Efficiency_KM_L", "Is_Abnormal", "Abnormal_Reason", "CreatedAt", "CreatedBy", "IsDeleted"
+  ],
+  Fleet_Maintenance_Logs: [
+    "Maintenance_ID", "CompanyID", "Vehicle_ID", "Maintenance_Type", "Service_Category", "Date", "Odometer", 
+    "Next_Odometer_Service", "Next_Date_Service", "Cost", "Workshop_Name", "Invoice_Number", "Description", 
+    "Parts_Replaced", "Status", "Notes", "Attachment_URL", "CreatedAt", "CreatedBy", "IsDeleted"
+  ],
+  Fleet_Insurance_Logs: [
+    "Insurance_ID", "CompanyID", "Vehicle_ID", "Policy_Number", "Insurance_Company", "Policy_Type", 
+    "Start_Date", "End_Date", "Cost", "Coverage_Details", "Deductible_Amount", "Status", "Attachment_URL", "Notes", "CreatedAt", "CreatedBy", "IsDeleted"
+  ],
+  Fleet_Compliance_Logs: [
+    "Compliance_ID", "CompanyID", "Vehicle_ID", "Inspection_Type", "Issue_Date", "Expiry_Date", 
+    "Result", "Fee", "Center_Name", "Notes", "Attachment_URL", "CreatedAt", "CreatedBy", "IsDeleted"
+  ],
+  Fleet_Accident_Logs: [
+    "Accident_ID", "CompanyID", "Vehicle_ID", "Driver_ID", "Driver_Name", "Date", "Time", "Location", 
+    "Report_Number", "Fault_Percentage", "Estimated_Damage_Cost", "Insurance_Claim_Number", "Status", "Description", "Third_Party_Info", "Attachment_URLs", "CreatedAt", "CreatedBy", "IsDeleted"
+  ],
+  Fleet_Documents: [
+    "Document_ID", "CompanyID", "Vehicle_ID", "Document_Type", "Document_Name", "Document_Number", 
+    "Issue_Date", "Expiry_Date", "File_URL", "File_Size", "File_Type", "Notes", "CreatedAt", "CreatedBy", "IsDeleted"
   ]
 };
 
@@ -375,6 +408,26 @@ function doPost(e) {
       case 'CREATE_OFFER': return handleCreateOffer(payload);
       case 'UPDATE_OFFER': return handleUpdateOffer(payload);
       case 'DELETE_OFFER': return handleDeleteOffer(payload);
+
+      // FLEET & VEHICLES
+      case 'GET_VEHICLES': return responseOk(handleGetVehicles(payload));
+      case 'GET_VEHICLE_BY_ID': return responseOk(handleGetVehicleById(payload));
+      case 'CREATE_VEHICLE': return responseOk(handleCreateVehicle(payload));
+      case 'UPDATE_VEHICLE': return responseOk(handleUpdateVehicle(payload));
+      case 'DELETE_VEHICLE': return responseOk(handleDeleteVehicle(payload));
+      case 'GET_FUEL_LOGS': return responseOk(handleGetFuelLogs(payload));
+      case 'ADD_FUEL_LOG': return responseOk(handleAddFuelLog(payload));
+      case 'GET_MAINTENANCE_LOGS': return responseOk(handleGetMaintenanceLogs(payload));
+      case 'ADD_MAINTENANCE_LOG': return responseOk(handleAddMaintenanceLog(payload));
+      case 'GET_INSURANCE_LOGS': return responseOk(handleGetInsuranceLogs(payload));
+      case 'ADD_INSURANCE_LOG': return responseOk(handleAddInsuranceLog(payload));
+      case 'GET_COMPLIANCE_LOGS': return responseOk(handleGetComplianceLogs(payload));
+      case 'ADD_COMPLIANCE_LOG': return responseOk(handleAddComplianceLog(payload));
+      case 'GET_ACCIDENT_LOGS': return responseOk(handleGetAccidentLogs(payload));
+      case 'ADD_ACCIDENT_LOG': return responseOk(handleAddAccidentLog(payload));
+      case 'GET_DOCUMENTS': return responseOk(handleGetFleetDocuments(payload));
+      case 'ADD_DOCUMENT': return responseOk(handleAddFleetDocument(payload));
+      case 'IMPORT_VEHICLES_BATCH': return responseOk(handleImportVehiclesBatch(payload));
 
 
       default:
@@ -1760,3 +1813,250 @@ function handleDeleteOffer(payload) {
   }
   return createResponse(false, null, 'Offer not found');
 }
+
+// ==========================================
+// FLEET MANAGEMENT MODULE HANDLERS
+// ==========================================
+
+function handleGetVehicles(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  return getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
+}
+
+function handleGetVehicleById(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  const vehicleId = payload.Vehicle_ID || payload.vehicleId;
+  const vehicles = getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
+  const vehicle = vehicles.find(v => v.Vehicle_ID === vehicleId);
+  if (!vehicle) throw new Error("Vehicle not found: " + vehicleId);
+  return vehicle;
+}
+
+function handleCreateVehicle(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  const vehicleId = payload.Vehicle_ID || ("VEH-" + generateUUID().substring(0, 8).toUpperCase());
+  const now = getTimestamp();
+
+  const vehicleObj = {
+    Vehicle_ID: vehicleId,
+    CompanyID: companyId,
+    Plate_Number: payload.Plate_Number || "",
+    Plate_Letters: payload.Plate_Letters || "",
+    Plate_Numbers: payload.Plate_Numbers || "",
+    Make: payload.Make || payload.Brand || "",
+    Brand: payload.Brand || payload.Make || "",
+    Model: payload.Model || "",
+    Year: payload.Year || new Date().getFullYear(),
+    Color: payload.Color || "",
+    Vehicle_Type: payload.Vehicle_Type || "SEDAN",
+    Fuel_Type: payload.Fuel_Type || "GASOLINE_91",
+    Tank_Capacity: payload.Tank_Capacity || 50,
+    Current_Odometer: payload.Current_Odometer || 0,
+    Primary_Driver_ID: payload.Primary_Driver_ID || "",
+    Primary_Driver_Name: payload.Primary_Driver_Name || "",
+    Secondary_Driver_ID: payload.Secondary_Driver_ID || "",
+    Secondary_Driver_Name: payload.Secondary_Driver_Name || "",
+    Operational_Status: payload.Operational_Status || "ACTIVE",
+    Ownership_Type: payload.Ownership_Type || "OWNED",
+    Branch: payload.Branch || "",
+    Location: payload.Location || "",
+    Chassis_Number: payload.Chassis_Number || payload.VIN || "",
+    VIN: payload.VIN || payload.Chassis_Number || "",
+    Engine_Number: payload.Engine_Number || "",
+    Notes: payload.Notes || "",
+    Readiness_Score: payload.Readiness_Score !== undefined ? payload.Readiness_Score : 100,
+    Readiness_Reasons: Array.isArray(payload.Readiness_Reasons) ? payload.Readiness_Reasons.join(",") : (payload.Readiness_Reasons || ""),
+    Insurance_Expiry: payload.Insurance_Expiry || "",
+    Inspection_Expiry: payload.Inspection_Expiry || "",
+    Registration_Expiry: payload.Registration_Expiry || "",
+    CreatedAt: now,
+    UpdatedAt: now,
+    CreatedBy: payload.CreatedBy || "SYSTEM",
+    UpdatedBy: payload.CreatedBy || "SYSTEM",
+    IsDeleted: false,
+    DeletedAt: "",
+    DeletedBy: ""
+  };
+
+  insertRow("Vehicles", vehicleObj);
+  return vehicleObj;
+}
+
+function handleUpdateVehicle(payload) {
+  const vehicleId = payload.Vehicle_ID || payload.vehicleId;
+  payload.UpdatedAt = getTimestamp();
+  if (Array.isArray(payload.Readiness_Reasons)) {
+    payload.Readiness_Reasons = payload.Readiness_Reasons.join(",");
+  }
+  updateRow("Vehicles", "Vehicle_ID", vehicleId, payload);
+  return payload;
+}
+
+function handleDeleteVehicle(payload) {
+  const vehicleId = payload.Vehicle_ID || payload.vehicleId;
+  const now = getTimestamp();
+  updateRow("Vehicles", "Vehicle_ID", vehicleId, {
+    IsDeleted: true,
+    DeletedAt: now,
+    DeletedBy: payload.DeletedBy || "USER"
+  });
+  return { success: true, vehicleId };
+}
+
+function handleGetFuelLogs(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  let filters = { CompanyID: companyId };
+  if (payload.Vehicle_ID) filters.Vehicle_ID = payload.Vehicle_ID;
+  return getTableData('Fleet_Fuel_Logs', filters);
+}
+
+function handleAddFuelLog(payload) {
+  const logId = payload.Log_ID || ("FUEL-" + generateUUID().substring(0, 8).toUpperCase());
+  payload.Log_ID = logId;
+  payload.CreatedAt = getTimestamp();
+  payload.IsDeleted = false;
+  insertRow("Fleet_Fuel_Logs", payload);
+
+  // Update vehicle current odometer if higher
+  if (payload.Vehicle_ID && payload.Odometer) {
+    try {
+      const v = handleGetVehicleById({ Vehicle_ID: payload.Vehicle_ID, CompanyID: payload.CompanyID });
+      if (v && Number(payload.Odometer) > Number(v.Current_Odometer || 0)) {
+        updateRow("Vehicles", "Vehicle_ID", payload.Vehicle_ID, {
+          Current_Odometer: payload.Odometer,
+          UpdatedAt: getTimestamp()
+        });
+      }
+    } catch(e) {}
+  }
+
+  return payload;
+}
+
+function handleGetMaintenanceLogs(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  let filters = { CompanyID: companyId };
+  if (payload.Vehicle_ID) filters.Vehicle_ID = payload.Vehicle_ID;
+  return getTableData('Fleet_Maintenance_Logs', filters);
+}
+
+function handleAddMaintenanceLog(payload) {
+  const maintId = payload.Maintenance_ID || ("MAINT-" + generateUUID().substring(0, 8).toUpperCase());
+  payload.Maintenance_ID = maintId;
+  payload.CreatedAt = getTimestamp();
+  payload.IsDeleted = false;
+  insertRow("Fleet_Maintenance_Logs", payload);
+
+  if (payload.Vehicle_ID && payload.Odometer) {
+    try {
+      const v = handleGetVehicleById({ Vehicle_ID: payload.Vehicle_ID, CompanyID: payload.CompanyID });
+      if (v && Number(payload.Odometer) > Number(v.Current_Odometer || 0)) {
+        updateRow("Vehicles", "Vehicle_ID", payload.Vehicle_ID, {
+          Current_Odometer: payload.Odometer,
+          UpdatedAt: getTimestamp()
+        });
+      }
+    } catch(e) {}
+  }
+
+  return payload;
+}
+
+function handleGetInsuranceLogs(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  let filters = { CompanyID: companyId };
+  if (payload.Vehicle_ID) filters.Vehicle_ID = payload.Vehicle_ID;
+  return getTableData('Fleet_Insurance_Logs', filters);
+}
+
+function handleAddInsuranceLog(payload) {
+  const insId = payload.Insurance_ID || ("INS-" + generateUUID().substring(0, 8).toUpperCase());
+  payload.Insurance_ID = insId;
+  payload.CreatedAt = getTimestamp();
+  payload.IsDeleted = false;
+  insertRow("Fleet_Insurance_Logs", payload);
+
+  // Sync to Vehicle Insurance_Expiry
+  if (payload.Vehicle_ID && payload.End_Date) {
+    try {
+      updateRow("Vehicles", "Vehicle_ID", payload.Vehicle_ID, {
+        Insurance_Expiry: payload.End_Date,
+        UpdatedAt: getTimestamp()
+      });
+    } catch(e) {}
+  }
+
+  return payload;
+}
+
+function handleGetComplianceLogs(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  let filters = { CompanyID: companyId };
+  if (payload.Vehicle_ID) filters.Vehicle_ID = payload.Vehicle_ID;
+  return getTableData('Fleet_Compliance_Logs', filters);
+}
+
+function handleAddComplianceLog(payload) {
+  const compId = payload.Compliance_ID || ("COMP-" + generateUUID().substring(0, 8).toUpperCase());
+  payload.Compliance_ID = compId;
+  payload.CreatedAt = getTimestamp();
+  payload.IsDeleted = false;
+  insertRow("Fleet_Compliance_Logs", payload);
+
+  // Sync to Vehicle Inspection_Expiry if type is MVPI
+  if (payload.Vehicle_ID && payload.Expiry_Date) {
+    try {
+      updateRow("Vehicles", "Vehicle_ID", payload.Vehicle_ID, {
+        Inspection_Expiry: payload.Expiry_Date,
+        UpdatedAt: getTimestamp()
+      });
+    } catch(e) {}
+  }
+
+  return payload;
+}
+
+function handleGetAccidentLogs(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  let filters = { CompanyID: companyId };
+  if (payload.Vehicle_ID) filters.Vehicle_ID = payload.Vehicle_ID;
+  return getTableData('Fleet_Accident_Logs', filters);
+}
+
+function handleAddAccidentLog(payload) {
+  const accId = payload.Accident_ID || ("ACC-" + generateUUID().substring(0, 8).toUpperCase());
+  payload.Accident_ID = accId;
+  payload.CreatedAt = getTimestamp();
+  payload.IsDeleted = false;
+  insertRow("Fleet_Accident_Logs", payload);
+  return payload;
+}
+
+function handleGetFleetDocuments(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  let filters = { CompanyID: companyId };
+  if (payload.Vehicle_ID) filters.Vehicle_ID = payload.Vehicle_ID;
+  return getTableData('Fleet_Documents', filters);
+}
+
+function handleAddFleetDocument(payload) {
+  const docId = payload.Document_ID || ("DOC-" + generateUUID().substring(0, 8).toUpperCase());
+  payload.Document_ID = docId;
+  payload.CreatedAt = getTimestamp();
+  payload.IsDeleted = false;
+  insertRow("Fleet_Documents", payload);
+  return payload;
+}
+
+function handleImportVehiclesBatch(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  const vehiclesList = payload.vehicles || [];
+  const results = [];
+  for (let i = 0; i < vehiclesList.length; i++) {
+    const v = vehiclesList[i];
+    v.CompanyID = companyId;
+    results.push(handleCreateVehicle(v));
+  }
+  return { importedCount: results.length, data: results };
+}
+

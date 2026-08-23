@@ -5,7 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { commissionService } from '@/services/commissionService';
 import { CommissionRecord, CommissionTypeCategory } from '@/types/commissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, Package, Lock } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, Package, Lock, Truck, Gauge, Wrench, ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { fleetService } from '@/services/fleetService';
 import { format, startOfMonth, endOfDay, subDays, startOfYear, subMonths, endOfMonth, startOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/utils/cn';
@@ -38,7 +40,14 @@ export function Dashboard() {
     enabled: Boolean(companyId),
   });
 
+  const { data: fleetKpisRes } = useQuery({
+    queryKey: ['fleetKPIs', companyId],
+    queryFn: () => fleetService.getFleetKPIs(companyId),
+    enabled: Boolean(companyId),
+  });
+
   const records: CommissionRecord[] = useMemo(() => recordsRes?.data || [], [recordsRes]);
+  const fleetKpis = fleetKpisRes?.data;
 
   // Filters State
   const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()));
@@ -470,6 +479,67 @@ export function Dashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Fleet Operations Overview Card */}
+      <Card className="border-indigo-100 bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white overflow-hidden shadow-lg">
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 text-indigo-400">
+                <Truck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
+                  نظام إدارة المركبات والأسطول
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                    تشغيلي نشط
+                  </span>
+                </h3>
+                <p className="text-xs text-indigo-200/70 mt-0.5">
+                  متابعة حالة وتكاليف المركبات، استهلاك الوقود، والصيانة الدورية للأسطول
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 w-full md:w-auto">
+              <Link
+                to="/fleet"
+                className="w-full md:w-auto text-center px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/25 flex items-center justify-center gap-1.5"
+              >
+                فتح منصة الأسطول
+                <ArrowUpRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-5 border-t border-white/10">
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <span className="text-[11px] text-indigo-200/60 block mb-1">المركبات في الخدمة</span>
+              <span className="text-lg font-black font-mono text-emerald-400">
+                {fleetKpis?.activeVehicles ?? 0} مركبات
+              </span>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <span className="text-[11px] text-indigo-200/60 block mb-1">في ورشة الصيانة</span>
+              <span className="text-lg font-black font-mono text-amber-400">
+                {fleetKpis?.inMaintenanceVehicles ?? 0} مركبة
+              </span>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <span className="text-[11px] text-indigo-200/60 block mb-1">متوسط مؤشر الجاهزية</span>
+              <span className="text-lg font-black font-mono text-teal-300">
+                {(fleetKpis?.totalVehicles ?? 0) > 0 ? `${fleetKpis?.averageReadinessIndex}%` : '100%'}
+              </span>
+            </div>
+            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+              <span className="text-[11px] text-indigo-200/60 block mb-1">تنبيهات التجديد</span>
+              <span className="text-lg font-black font-mono text-rose-300">
+                {((fleetKpis?.expiringInsuranceCount ?? 0) + (fleetKpis?.expiringInspectionCount ?? 0) + (fleetKpis?.expiringLicenseCount ?? 0))} مستندات
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Top Agents Table */}
       <Card className="border-slate-200">
