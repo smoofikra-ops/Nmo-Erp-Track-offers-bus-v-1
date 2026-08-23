@@ -4,6 +4,7 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 import { Breadcrumb } from './Breadcrumb';
 import { User, LogOut, Building, ArrowLeftRight, Menu } from 'lucide-react';
 import { Button } from './ui/button';
+import { cn } from '@/utils/cn';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -12,14 +13,24 @@ export function Header() {
   const { t } = useTranslation();
   const { user, logout, switchCompany } = useAuth();
   const { toggleDirection, direction } = useTheme();
-  const { toggleMobile } = useSidebar();
+  const { toggleSidebar, isPinned } = useSidebar();
 
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         <div className="flex flex-1 items-center gap-x-4">
-          <Button variant="ghost" size="icon" onClick={toggleMobile}>
-            <Menu className="h-5 w-5 text-slate-500" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            title={isPinned ? t('common.unpinSidebar', 'إلغاء تثبيت القائمة') : t('common.pinSidebar', 'تثبيت القائمة')}
+            aria-label="Toggle Sidebar"
+            className={cn(
+              "transition-colors",
+              isPinned ? "text-indigo-600 bg-indigo-50 hover:bg-indigo-100" : "text-slate-500 hover:text-slate-900"
+            )}
+          >
+            <Menu className="h-5 w-5" />
           </Button>
           <div className="flex-1">
              <Breadcrumb />
