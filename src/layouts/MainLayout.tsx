@@ -2,18 +2,14 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
-import { useSidebar } from '@/contexts/SidebarContext';
 import { cn } from '@/utils/cn';
 
 export function MainLayout() {
-  const { isPinned } = useSidebar();
-
   return (
     <div className="min-h-screen bg-slate-50 flex">
       <Sidebar />
       <div className={cn(
-        "flex flex-1 flex-col transition-all duration-300",
-        isPinned ? "lg:ps-72" : "lg:ps-20"
+        "flex flex-1 flex-col transition-all duration-300 lg:ps-[64px]"
       )}>
         <Header />
         <main className="flex-1 min-w-0 overflow-x-hidden">

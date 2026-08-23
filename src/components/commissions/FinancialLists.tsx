@@ -30,35 +30,59 @@ export function RequiredAmountList({ items, onChange }: RequiredAmountListProps)
           <Plus className="w-3 h-3 mr-1" /> إضافة مبلغ مطلوب
         </Button>
       </div>
+
       {items.length === 0 ? (
         <p className="text-xs text-slate-400 text-center py-4 border rounded border-dashed bg-slate-50">لا توجد مبالغ مطلوبة. أضف مبلغاً للاستمرار.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3 md:space-y-2">
+          {/* Header row for desktop */}
+          <div 
+            className="hidden md:grid gap-[12px] px-2 text-xs font-semibold text-slate-500 text-right w-full max-w-full box-border"
+            style={{ gridTemplateColumns: 'minmax(120px, 1fr) minmax(140px, 1.3fr) 48px' }}
+          >
+            <div>وصف المبلغ</div>
+            <div>المبلغ المطلوب</div>
+            <div></div>
+          </div>
+          
           {items.map(item => (
-            <div key={item.id} className="flex gap-2 items-center bg-white p-2 rounded border border-slate-200 shadow-sm">
-              <input
-                type="text"
-                className="flex-1 p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500"
-                value={item.description}
-                onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                placeholder="وصف المبلغ (مثل: فواتير أمس)"
-              />
-              <input
-                type="number"
-                min="0"
-                className="w-28 p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500"
-                value={item.amount || ''}
-                onChange={(e) => updateItem(item.id, 'amount', Number(e.target.value))}
-                placeholder="المبلغ"
-              />
-              <button onClick={() => handleRemove(item.id)} className="text-red-500 hover:text-red-700 p-2 rounded-md hover:bg-red-50 transition-colors">
-                <Trash2 className="w-4 h-4" />
-              </button>
+            <div 
+              key={item.id} 
+              className="flex flex-col gap-3 md:grid items-start md:items-start bg-white p-4 md:p-2 rounded-lg border border-slate-200 shadow-sm w-full max-w-full box-border"
+              style={{ gridTemplateColumns: 'minmax(120px, 1fr) minmax(140px, 1.3fr) 48px', gap: '12px' }}
+            >
+              <div className="w-full min-w-0">
+                <label className="block md:hidden text-xs text-slate-500 mb-1 font-semibold">وصف المبلغ</label>
+                <input
+                  type="text"
+                  className="w-full h-[52px] px-3 py-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500 font-medium placeholder-slate-400 min-w-0"
+                  value={item.description}
+                  onChange={(e) => updateItem(item.id, 'description', e.target.value)}
+                  placeholder="مثال: فواتير أمس"
+                />
+              </div>
+              <div className="w-full min-w-0">
+                <label className="block md:hidden text-xs text-slate-500 mb-1 font-semibold">المبلغ المطلوب</label>
+                <div dir="ltr" className="flex items-center gap-2 w-full h-[52px] pl-2 pr-3 py-2 rounded-md border-2 border-slate-300 focus-within:border-indigo-600 focus-within:bg-indigo-50 bg-white shadow-sm transition-colors overflow-hidden min-w-0">
+                  <FormattedAmountInput
+                    value={item.amount || 0}
+                    onChange={(val) => updateItem(item.id, 'amount', val)}
+                    placeholder="0.00"
+                    className="flex-1 min-w-0 text-lg md:text-[19px] font-bold text-indigo-700 outline-none bg-transparent tabular-nums text-center"
+                  />
+                  <span className="text-[15px] font-bold text-slate-500 shrink-0 select-none w-auto min-w-[32px] text-center" dir="rtl">ر.س</span>
+                </div>
+              </div>
+              <div className="w-full md:w-auto flex justify-end md:justify-center md:h-[52px] min-w-0">
+                <button onClick={() => handleRemove(item.id)} className="text-red-500 hover:text-red-700 p-2 md:mt-0 rounded-md hover:bg-red-50 transition-colors w-12 h-[52px] flex items-center justify-center shrink-0" title="حذف المبلغ">
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           ))}
-          <div className="flex justify-between items-center pt-2 px-1 text-sm">
+          <div className="flex justify-between items-center pt-3 px-2 text-sm border-t border-slate-100">
              <span className="font-bold text-slate-700">الإجمالي:</span>
-             <span className="font-bold text-slate-900">{items.reduce((s, i) => s + (Number(i.amount)||0), 0).toFixed(2)} ر.س</span>
+             <span className="font-bold text-indigo-700 text-base">{items.reduce((s, i) => s + (Number(i.amount)||0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</span>
           </div>
         </div>
       )}
@@ -154,23 +178,31 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
       ) : (
         <div className="space-y-4 md:space-y-2">
           {/* Header row for desktop */}
-          <div className="hidden md:flex gap-2 px-2 text-xs font-semibold text-slate-500 text-right">
-            <div style={{ width: '30%' }}>نوع العملية</div>
-            <div style={{ width: '30%' }}>وصف العملية (اختياري)</div>
-            <div style={{ width: '40%' }}>المبلغ المطلوب</div>
-            <div className="w-8 shrink-0"></div>
+          <div 
+            className="hidden md:grid gap-[12px] px-2 text-xs font-semibold text-slate-500 text-right w-full max-w-full box-border"
+            style={{ gridTemplateColumns: 'minmax(80px, 0.7fr) minmax(120px, 1fr) minmax(140px, 1.2fr) 48px' }}
+          >
+            <div>نوع العملية</div>
+            <div>وصف العملية (اختياري)</div>
+            <div>المبلغ المطلوب</div>
+            <div></div>
           </div>
+
           {items.map(item => {
             const isDescInvalid = /^\d+(\.\d+)?$/.test((item.description || '').trim());
             
             return (
-              <div key={item.id} className="flex flex-col md:flex-row gap-2 md:items-start bg-white p-3 md:p-2 rounded-lg border border-slate-200 shadow-sm relative">
+              <div 
+                key={item.id} 
+                className="flex flex-col gap-3 md:grid items-start md:items-start bg-white p-4 md:p-2 rounded-lg border border-slate-200 shadow-sm w-full max-w-full box-border"
+                style={{ gridTemplateColumns: 'minmax(80px, 0.7fr) minmax(120px, 1fr) minmax(140px, 1.2fr) 48px', gap: '12px' }}
+              >
                 
                 {/* Payment Type */}
-                <div className="w-full md:w-[30%]">
-                  <label className="block md:hidden text-xs text-slate-500 mb-1">نوع العملية</label>
+                <div className="w-full min-w-0">
+                  <label className="block md:hidden text-xs text-slate-500 mb-1 font-semibold">نوع العملية</label>
                   <select
-                    className="w-full p-2.5 md:p-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500 bg-white"
+                    className="w-full h-[52px] px-3 py-2 rounded-md border border-slate-300 text-sm outline-none focus:border-indigo-500 bg-white font-medium min-w-0"
                     value={item.method}
                     onChange={(e) => updateItem(item.id, 'method', e.target.value)}
                   >
@@ -181,14 +213,14 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
                 </div>
 
                 {/* Description */}
-                <div className="w-full md:w-[30%]">
-                  <label className="block md:hidden text-xs text-slate-500 mb-1">وصف العملية (اختياري)</label>
+                <div className="w-full min-w-0">
+                  <label className="block md:hidden text-xs text-slate-500 mb-1 font-semibold">وصف العملية (اختياري)</label>
                   <input
                     type="text"
-                    className={`w-full p-2.5 md:p-2 rounded-md border text-sm outline-none ${isDescInvalid ? 'border-red-400 focus:border-red-500 bg-red-50 text-red-900' : 'border-slate-300 focus:border-indigo-500'}`}
+                    className={`w-full h-[52px] px-3 py-2 rounded-md border text-sm outline-none font-medium placeholder-slate-400 min-w-0 ${isDescInvalid ? 'border-red-400 focus:border-red-500 bg-red-50 text-red-900' : 'border-slate-300 focus:border-indigo-500'}`}
                     value={item.description || ''}
                     onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                    placeholder="مثال: تسوية فاتورة رقم 1058"
+                    placeholder="مثال: تسوية 1058"
                   />
                   {isDescInvalid && (
                     <p className="text-red-500 text-xs mt-1">هذا الحقل مخصص لوصف العملية فقط، أدخل المبلغ في حقل المبلغ المطلوب.</p>
@@ -196,26 +228,27 @@ export function PaymentList({ items, onChange }: PaymentListProps) {
                 </div>
 
                 {/* Amount */}
-                <div className="w-full md:w-[40%] flex items-start gap-2">
-                  <div className="flex-1">
-                    <label className="block md:hidden text-xs text-slate-500 mb-1">المبلغ المطلوب</label>
-                    <div className="flex items-center gap-2 w-full p-2 rounded-md border-2 border-slate-300 focus-within:border-indigo-600 focus-within:bg-indigo-50 bg-white shadow-sm transition-colors overflow-hidden">
-                      <FormattedAmountInput
-                        value={item.amount || 0}
-                        onChange={(val) => updateItem(item.id, 'amount', val)}
-                        placeholder="0.00"
-                        className="w-full text-lg font-bold text-indigo-700 outline-none bg-transparent tabular-nums text-left"
-                      />
-                      <span className="text-sm font-bold text-slate-500 shrink-0 select-none">ر.س</span>
-                    </div>
+                <div className="w-full min-w-0">
+                  <label className="block md:hidden text-xs text-slate-500 mb-1 font-semibold">المبلغ المطلوب</label>
+                  <div dir="ltr" className="flex items-center gap-2 w-full h-[52px] pl-2 pr-3 py-2 rounded-md border-2 border-slate-300 focus-within:border-indigo-600 focus-within:bg-indigo-50 bg-white shadow-sm transition-colors overflow-hidden min-w-0">
+                    <FormattedAmountInput
+                      value={item.amount || 0}
+                      onChange={(val) => updateItem(item.id, 'amount', val)}
+                      placeholder="0.00"
+                      className="flex-1 min-w-0 text-lg md:text-[19px] font-bold text-indigo-700 outline-none bg-transparent tabular-nums text-center"
+                    />
+                    <span className="text-[15px] font-bold text-slate-500 shrink-0 select-none w-auto min-w-[32px] text-center" dir="rtl">ر.س</span>
                   </div>
-                  
+                </div>
+
+                {/* Delete */}
+                <div className="w-full md:w-auto flex justify-end md:justify-center md:h-[52px] min-w-0">
                   <button 
                     onClick={() => handleRemove(item.id)}
-                    className="mt-6 md:mt-0 text-red-500 hover:text-red-700 p-2.5 md:p-2 rounded-md hover:bg-red-50 transition-colors shrink-0"
+                    className="text-red-500 hover:text-red-700 p-2 md:mt-0 rounded-md hover:bg-red-50 transition-colors w-12 h-[52px] flex items-center justify-center shrink-0"
                     title="حذف الدفعة"
                   >
-                    <Trash2 className="w-5 h-5 md:w-4 md:h-4" />
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
               </div>
@@ -262,9 +295,9 @@ export function DiscountList({ items, onChange }: DiscountListProps) {
       ) : (
         <div className="space-y-2">
           {items.map(discount => (
-            <div key={discount.id} className="flex gap-2 items-center bg-slate-50 p-2 rounded border border-slate-200">
+            <div key={discount.id} className="flex gap-2 items-center bg-slate-50 p-2 rounded border border-slate-200 w-full max-w-full box-border min-w-0">
               <select
-                 className="flex-1 p-2 rounded border border-slate-300 text-sm outline-none focus:border-emerald-500 bg-white"
+                 className="flex-1 p-2 rounded border border-slate-300 text-sm outline-none focus:border-emerald-500 bg-white min-w-0"
                 value={discount.description}
                 onChange={(e) => updateItem(discount.id, 'description', e.target.value)}
               >
@@ -274,12 +307,12 @@ export function DiscountList({ items, onChange }: DiscountListProps) {
               <input
                 type="number"
                 min="0"
-                className="w-28 p-2 rounded border border-slate-300 text-sm outline-none focus:border-emerald-500"
+                className="w-28 p-2 rounded border border-slate-300 text-sm outline-none focus:border-emerald-500 min-w-0"
                 value={discount.amount || ''}
                 onChange={(e) => updateItem(discount.id, 'amount', Number(e.target.value))}
                 placeholder="المبلغ"
               />
-              <button onClick={() => handleRemove(discount.id)} className="text-red-500 hover:text-red-700 p-2 rounded-md hover:bg-red-50 transition-colors">
+              <button onClick={() => handleRemove(discount.id)} className="text-red-500 hover:text-red-700 p-2 rounded-md hover:bg-red-50 transition-colors shrink-0">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>

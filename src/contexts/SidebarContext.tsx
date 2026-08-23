@@ -15,7 +15,7 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [isPinned, setIsPinned] = useState(() => {
     const saved = localStorage.getItem('sidebar_pinned');
-    return saved !== null ? saved === 'true' : true; // Default pinned
+    return false; // Default pinned
   });
   const [isHovered, setIsHovered] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
