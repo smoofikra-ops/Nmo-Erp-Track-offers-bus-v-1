@@ -408,9 +408,9 @@ export default function FleetPage() {
         </div>
       ) : viewMode === 'GRID' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredVehicles.map(vehicle => (
+          {filteredVehicles.map((vehicle, index) => (
             <VehicleCard
-              key={vehicle.Vehicle_ID}
+              key={`${vehicle.Vehicle_ID}-${index}`}
               vehicle={vehicle}
               onViewDetails={(id) => setSelectedVehicleId(id)}
               onEdit={(v) => {

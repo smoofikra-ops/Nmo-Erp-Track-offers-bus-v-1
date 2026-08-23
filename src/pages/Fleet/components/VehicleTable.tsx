@@ -50,13 +50,13 @@ export function VehicleTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-          {vehicles.map((v) => {
+          {vehicles.map((v, index) => {
             const status = statusConfig[v.Operational_Status] || { label: v.Operational_Status, bg: 'bg-slate-100 text-slate-700' };
             const isMenuOpen = activeMenuId === v.Vehicle_ID;
 
             return (
               <tr 
-                key={v.Vehicle_ID}
+                key={`${v.Vehicle_ID}-${index}`}
                 className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
               >
                 {/* Plate Badge */}

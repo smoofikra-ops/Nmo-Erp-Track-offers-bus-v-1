@@ -138,8 +138,8 @@ export function AddFuelModal({ isOpen, onClose, vehicles, defaultVehicleId, onSu
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               id="fuel-vehicle-select"
             >
-              {vehicles.map(v => (
-                <option key={v.Vehicle_ID} value={v.Vehicle_ID}>
+              {vehicles.map((v, idx) => (
+                <option key={`${v.Vehicle_ID}-${idx}`} value={v.Vehicle_ID}>
                   {v.Plate_Number} — {v.Brand} {v.Model} ({v.Primary_Driver_Name || 'بدون سائق'})
                 </option>
               ))}

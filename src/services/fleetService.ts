@@ -71,14 +71,77 @@ function setStoredItem<T>(key: string, value: T): void {
   }
 }
 
+let entityCounter = Math.floor(Math.random() * 1000);
+export function generateUniqueEntityId(prefix: string, existingIds?: Set<string>): string {
+  entityCounter = (entityCounter + 1) % 1000000;
+  const timeStr = Date.now().toString(36).toUpperCase();
+  const randStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+  const countStr = entityCounter.toString(36).toUpperCase().padStart(3, '0');
+  let newId = `${prefix}-${timeStr}-${randStr}${countStr}`;
+
+  if (existingIds) {
+    while (existingIds.has(newId)) {
+      entityCounter++;
+      const extraRand = Math.random().toString(36).substring(2, 7).toUpperCase();
+      newId = `${prefix}-${Date.now().toString(36).toUpperCase()}-${extraRand}`;
+    }
+    existingIds.add(newId);
+  }
+  return newId;
+}
+
+// Deduplicate existing cached items from localStorage to prevent duplicate key collisions
+function sanitizeVehicles(items: Vehicle[]): Vehicle[] {
+  const seen = new Set<string>();
+  let changed = false;
+  const result = (items || []).map((v) => {
+    let id = v.Vehicle_ID;
+    if (!id || seen.has(id)) {
+      changed = true;
+      id = generateUniqueEntityId('VEH', seen);
+      return { ...v, Vehicle_ID: id };
+    }
+    seen.add(id);
+    return v;
+  });
+  if (changed) {
+    setStoredItem(STORAGE_KEYS.VEHICLES, result);
+  }
+  return result;
+}
+
+function sanitizeGenericList<T extends { [key: string]: any }>(
+  items: T[], 
+  idField: string, 
+  prefix: string, 
+  storageKey: string
+): T[] {
+  const seen = new Set<string>();
+  let changed = false;
+  const result = (items || []).map((item) => {
+    let id = item[idField];
+    if (!id || seen.has(id)) {
+      changed = true;
+      id = generateUniqueEntityId(prefix, seen);
+      return { ...item, [idField]: id };
+    }
+    seen.add(id);
+    return item;
+  });
+  if (changed) {
+    setStoredItem(storageKey, result);
+  }
+  return result;
+}
+
 // Memory / Cache state initialized from localStorage or seeds
-let vehiclesCache: Vehicle[] = getStoredItem(STORAGE_KEYS.VEHICLES, INITIAL_VEHICLES);
-let fuelCache: FuelLog[] = getStoredItem(STORAGE_KEYS.FUEL, INITIAL_FUEL_LOGS);
-let maintCache: MaintenanceLog[] = getStoredItem(STORAGE_KEYS.MAINTENANCE, INITIAL_MAINTENANCE_LOGS);
-let insuranceCache: InsuranceLog[] = getStoredItem(STORAGE_KEYS.INSURANCE, INITIAL_INSURANCE_LOGS);
-let complianceCache: ComplianceLog[] = getStoredItem(STORAGE_KEYS.COMPLIANCE, INITIAL_COMPLIANCE_LOGS);
-let accidentCache: AccidentLog[] = getStoredItem(STORAGE_KEYS.ACCIDENTS, INITIAL_ACCIDENT_LOGS);
-let docsCache: VehicleDocument[] = getStoredItem(STORAGE_KEYS.DOCUMENTS, INITIAL_DOCUMENTS);
+let vehiclesCache: Vehicle[] = sanitizeVehicles(getStoredItem(STORAGE_KEYS.VEHICLES, INITIAL_VEHICLES));
+let fuelCache: FuelLog[] = sanitizeGenericList(getStoredItem(STORAGE_KEYS.FUEL, INITIAL_FUEL_LOGS), 'Fuel_ID', 'FL', STORAGE_KEYS.FUEL);
+let maintCache: MaintenanceLog[] = sanitizeGenericList(getStoredItem(STORAGE_KEYS.MAINTENANCE, INITIAL_MAINTENANCE_LOGS), 'Maintenance_ID', 'MNT', STORAGE_KEYS.MAINTENANCE);
+let insuranceCache: InsuranceLog[] = sanitizeGenericList(getStoredItem(STORAGE_KEYS.INSURANCE, INITIAL_INSURANCE_LOGS), 'Policy_ID', 'INS', STORAGE_KEYS.INSURANCE);
+let complianceCache: ComplianceLog[] = sanitizeGenericList(getStoredItem(STORAGE_KEYS.COMPLIANCE, INITIAL_COMPLIANCE_LOGS), 'Record_ID', 'CMP', STORAGE_KEYS.COMPLIANCE);
+let accidentCache: AccidentLog[] = sanitizeGenericList(getStoredItem(STORAGE_KEYS.ACCIDENTS, INITIAL_ACCIDENT_LOGS), 'Accident_ID', 'ACC', STORAGE_KEYS.ACCIDENTS);
+let docsCache: VehicleDocument[] = sanitizeGenericList(getStoredItem(STORAGE_KEYS.DOCUMENTS, INITIAL_DOCUMENTS), 'Document_ID', 'DOC', STORAGE_KEYS.DOCUMENTS);
 
 // Recalculate vehicle metrics based on all sub-logs
 function refreshVehicleCalculations(vehicle: Vehicle): Vehicle {
@@ -218,7 +281,11 @@ export const fleetService = {
 
   createVehicle: async (vehicleData: Partial<Vehicle>, companyId: string = 'COM-0001'): Promise<ApiResponse<Vehicle>> => {
     const now = new Date().toISOString();
-    const vehicleId = vehicleData.Vehicle_ID || `VEH-${String(Date.now()).slice(-4)}`;
+    const existingVehicleIds = new Set(vehiclesCache.map(v => v.Vehicle_ID));
+    let vehicleId = vehicleData.Vehicle_ID;
+    if (!vehicleId || existingVehicleIds.has(vehicleId)) {
+      vehicleId = generateUniqueEntityId('VEH', existingVehicleIds);
+    }
 
     const yr = Number(vehicleData.Manufacturing_Year || vehicleData.Year) || new Date().getFullYear();
     const vinVal = vehicleData.VIN_Chassis_Number || vehicleData.VIN || '';
@@ -493,7 +560,11 @@ export const fleetService = {
 
   addFuelLog: async (logData: Partial<FuelLog>, companyId: string = 'COM-0001'): Promise<ApiResponse<FuelLog>> => {
     const now = new Date().toISOString();
-    const fuelId = logData.Fuel_ID || `FL-${String(Date.now()).slice(-4)}`;
+    const existingFuelIds = new Set(fuelCache.map(f => f.Fuel_ID));
+    let fuelId = logData.Fuel_ID;
+    if (!fuelId || existingFuelIds.has(fuelId)) {
+      fuelId = generateUniqueEntityId('FL', existingFuelIds);
+    }
     
     // Find previous odometer for this vehicle
     const existingLogs = fuelCache
@@ -580,7 +651,11 @@ export const fleetService = {
 
   addMaintenanceLog: async (logData: Partial<MaintenanceLog>, companyId: string = 'COM-0001'): Promise<ApiResponse<MaintenanceLog>> => {
     const now = new Date().toISOString();
-    const maintId = logData.Maintenance_ID || `MNT-${String(Date.now()).slice(-4)}`;
+    const existingMaintIds = new Set(maintCache.map(m => m.Maintenance_ID));
+    let maintId = logData.Maintenance_ID;
+    if (!maintId || existingMaintIds.has(maintId)) {
+      maintId = generateUniqueEntityId('MNT', existingMaintIds);
+    }
 
     const newLog: MaintenanceLog = {
       Maintenance_ID: maintId,
@@ -670,7 +745,11 @@ export const fleetService = {
 
   addInsuranceLog: async (logData: Partial<InsuranceLog>, companyId: string = 'COM-0001'): Promise<ApiResponse<InsuranceLog>> => {
     const now = new Date().toISOString();
-    const policyId = logData.Policy_ID || `INS-${String(Date.now()).slice(-4)}`;
+    const existingPolicyIds = new Set(insuranceCache.map(i => i.Policy_ID));
+    let policyId = logData.Policy_ID;
+    if (!policyId || existingPolicyIds.has(policyId)) {
+      policyId = generateUniqueEntityId('INS', existingPolicyIds);
+    }
 
     const newLog: InsuranceLog = {
       Policy_ID: policyId,
@@ -734,7 +813,11 @@ export const fleetService = {
 
   addComplianceLog: async (logData: Partial<ComplianceLog>, companyId: string = 'COM-0001'): Promise<ApiResponse<ComplianceLog>> => {
     const now = new Date().toISOString();
-    const recordId = logData.Record_ID || `CMP-${String(Date.now()).slice(-4)}`;
+    const existingRecordIds = new Set(complianceCache.map(c => c.Record_ID));
+    let recordId = logData.Record_ID;
+    if (!recordId || existingRecordIds.has(recordId)) {
+      recordId = generateUniqueEntityId('CMP', existingRecordIds);
+    }
 
     const newLog: ComplianceLog = {
       Record_ID: recordId,
@@ -797,7 +880,11 @@ export const fleetService = {
 
   addAccidentLog: async (logData: Partial<AccidentLog>, companyId: string = 'COM-0001'): Promise<ApiResponse<AccidentLog>> => {
     const now = new Date().toISOString();
-    const accidentId = logData.Accident_ID || `ACC-${String(Date.now()).slice(-4)}`;
+    const existingAccidentIds = new Set(accidentCache.map(a => a.Accident_ID));
+    let accidentId = logData.Accident_ID;
+    if (!accidentId || existingAccidentIds.has(accidentId)) {
+      accidentId = generateUniqueEntityId('ACC', existingAccidentIds);
+    }
     const vehicle = vehiclesCache.find(v => v.Vehicle_ID === logData.Vehicle_ID);
 
     const newLog: AccidentLog = {
@@ -890,7 +977,11 @@ export const fleetService = {
 
   addDocument: async (docData: Partial<VehicleDocument>, companyId: string = 'COM-0001'): Promise<ApiResponse<VehicleDocument>> => {
     const now = new Date().toISOString();
-    const docId = docData.Document_ID || `DOC-${String(Date.now()).slice(-4)}`;
+    const existingDocIds = new Set(docsCache.map(d => d.Document_ID));
+    let docId = docData.Document_ID;
+    if (!docId || existingDocIds.has(docId)) {
+      docId = generateUniqueEntityId('DOC', existingDocIds);
+    }
 
     const newDoc: VehicleDocument = {
       Document_ID: docId,

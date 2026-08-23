@@ -248,8 +248,8 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {vehicles.map(v => (
-                    <tr key={v.Vehicle_ID} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  {vehicles.map((v, index) => (
+                    <tr key={`${v.Vehicle_ID}-${index}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="py-3 px-4 font-mono font-bold">{v.Plate_Number}</td>
                       <td className="py-3 px-4 font-medium">{v.Brand} {v.Model} ({v.Year})</td>
                       <td className="py-3 px-4">{v.Primary_Driver_Name || 'بدون سائق'}</td>

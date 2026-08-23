@@ -632,8 +632,8 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
                     </td>
                   </tr>
                 ) : (
-                  fuelLogs.map((log) => (
-                    <tr key={log.Log_ID} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  fuelLogs.map((log, idx) => (
+                    <tr key={log.Fuel_ID || log.Log_ID || `fuel-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="py-3 px-4 font-mono font-medium">{log.Date}</td>
                       <td className="py-3 px-4 font-mono font-bold">{log.Odometer?.toLocaleString('en-US')} كم</td>
                       <td className="py-3 px-4 font-mono text-indigo-600 font-semibold">{log.Km_Since_Last_Fuel ? `${log.Km_Since_Last_Fuel} كم` : '-'}</td>
@@ -698,8 +698,8 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
                     </td>
                   </tr>
                 ) : (
-                  maintLogs.map((log) => (
-                    <tr key={log.Log_ID} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  maintLogs.map((log, idx) => (
+                    <tr key={log.Maintenance_ID || log.Log_ID || `maint-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <td className="py-3 px-4 font-mono font-medium">{log.Date}</td>
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{log.Maintenance_Type}</td>
                       <td className="py-3 px-4 font-mono">{log.Odometer?.toLocaleString('en-US')} كم</td>
@@ -739,8 +739,8 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {insuranceLogs.map((log) => (
-              <div key={log.Log_ID} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+            {insuranceLogs.map((log, idx) => (
+              <div key={log.Policy_ID || log.Log_ID || `ins-${idx}`} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
                     <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold">
@@ -803,8 +803,8 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {complianceLogs.map((log) => (
-                  <tr key={log.Log_ID} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                {complianceLogs.map((log, idx) => (
+                  <tr key={log.Record_ID || log.Log_ID || `comp-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="py-3 px-4 font-mono">{log.Inspection_Date}</td>
                     <td className="py-3 px-4 font-mono font-bold text-purple-600">{log.Inspection_Expiry}</td>
                     <td className="py-3 px-4">
@@ -845,8 +845,8 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
                 <p className="text-xs text-slate-500 mt-0.5">لم يتم تسجيل أي حوادث لهذه المركبة حتى الآن.</p>
               </div>
             ) : (
-              accidentLogs.map((log) => (
-                <div key={log.Log_ID} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+              accidentLogs.map((log, idx) => (
+                <div key={log.Accident_ID || log.Log_ID || `acc-${idx}`} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
@@ -903,8 +903,8 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {documents.map((doc) => (
-              <div key={doc.Doc_ID} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3 flex flex-col justify-between">
+            {documents.map((doc, idx) => (
+              <div key={doc.Document_ID || doc.Doc_ID || `doc-${idx}`} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3 flex flex-col justify-between">
                 <div className="flex items-start gap-3">
                   <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-600 shrink-0">
                     <FileText className="w-5 h-5" />
