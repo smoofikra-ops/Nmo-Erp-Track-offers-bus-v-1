@@ -91,6 +91,7 @@ export function ArchiveCenterTab() {
       case 'QUOTE': return 'عرض سعر';
       case 'PRODUCT': return 'منتج';
       case 'EMPLOYEE': return 'مندوب / موظف';
+      case 'VEHICLE': return 'مركبة / أسطول';
       default: return type;
     }
   };

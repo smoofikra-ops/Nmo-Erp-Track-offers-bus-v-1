@@ -640,293 +640,465 @@ class AIAssistantService {
     }
   }
 
+  // --- Helper: Format Employee Display ---
+  private formatEmployeeLabel(employee: Employee | { ArabicName?: string; EnglishName?: string; EmployeeName?: string; EmployeeID?: string; EmployeeCode?: string | number }): string {
+    const name = employee.ArabicName || employee.EnglishName || (employee as any).EmployeeName || (employee as any).name || 'موظف';
+    const code = (employee as any).EmployeeCode || employee.EmployeeID;
+    return code ? `${name} — ${code}` : name;
+  }
+
   // --- HANDLER: Commissions & Orders ---
   private async handleCommissionsIntent(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
-    const [empRes, commRes] = await Promise.all([
-      employeeService.getEmployees(companyId),
-      commissionService.getCommissionRecords(companyId)
-    ]);
+    try {
+      const [empRes, commRes] = await Promise.all([
+        employeeService.getEmployees(companyId),
+        commissionService.getCommissionRecords(companyId)
+      ]);
 
-    const employees: Employee[] = empRes.data || [];
-    const records = commRes.data || [];
-
-    // Specific Employee inquiry
-    let targetEmployee: Employee | undefined;
-    for (const e of employees) {
-      if (
-        (e.EmployeeID && prompt.includes(e.EmployeeID)) ||
-        (e.EmployeeCode && prompt.includes(String(e.EmployeeCode))) ||
-        (e.ArabicName && prompt.includes(e.ArabicName)) ||
-        (e.EnglishName && prompt.includes(e.EnglishName))
-      ) {
-        targetEmployee = e;
-        break;
+      if (commRes.error) {
+        return {
+          type: 'TEXT',
+          module: 'COMMISSIONS',
+          title: 'تنبيه الاتصال ببيانات العمولات',
+          summaryText: `⚠️ تعذر استرجاع سجلات العمولات من خادم ERP حالياً (${commRes.error.details || commRes.error.code || 'خطأ في الاتصال'}). يرجى التحقق من اتصال الشبكة وإعادة المحاولة.`
+        };
       }
-    }
 
-    if (!targetEmployee && context?.currentEmployeeId) {
-      targetEmployee = employees.find(e => e.EmployeeID === context.currentEmployeeId);
-    }
+      const employees: Employee[] = empRes.data || [];
+      const records: any[] = commRes.data || [];
 
-    if (targetEmployee) {
-      // Find employee's specific records
-      const empRecords = records.filter((c: any) => c.employeeId === targetEmployee!.EmployeeID || c.employeeCode === targetEmployee!.EmployeeID || c.EmployeeID === targetEmployee!.EmployeeID);
-      const totalEarned = empRecords.reduce((sum: number, c: any) => sum + (Number(c.totalCommission) || Number(c.netAmount) || Number(c.amount) || 0), 0);
-      const totalPaid = empRecords.reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
-      const remainingDue = totalEarned - totalPaid;
+      if (!records.length) {
+        return {
+          type: 'TEXT',
+          module: 'COMMISSIONS',
+          title: 'تقرير العمولات والمستحقات',
+          summaryText: 'لا توجد سجلات عمولات مسجلة في النظام حتى الآن.'
+        };
+      }
+
+      // Helper to calculate record metrics
+      const extractCommission = (c: any) => {
+        return Number(c.netCommission ?? c.grossCommission ?? c.totalCommission ?? c.netAmount ?? c.amount ?? 0);
+      };
+
+      const extractRequired = (c: any) => {
+        return Number(c.finalRequiredAmount ?? c.totalRequiredAmount ?? c.codRequiredAmount ?? 0);
+      };
+
+      const extractPaid = (c: any) => {
+        if (Array.isArray(c.paymentItems) && c.paymentItems.length > 0) {
+          return c.paymentItems.reduce((acc: number, p: any) => acc + (Number(p.amount) || 0), 0);
+        }
+        return Number(c.onlinePaidAmount ?? c.paidAmount ?? 0);
+      };
+
+      // Specific Employee inquiry
+      let targetEmployee: Employee | undefined;
+      for (const e of employees) {
+        if (
+          (e.EmployeeID && prompt.includes(e.EmployeeID)) ||
+          (e.EmployeeCode && prompt.includes(String(e.EmployeeCode))) ||
+          (e.ArabicName && prompt.includes(e.ArabicName)) ||
+          (e.EnglishName && prompt.includes(e.EnglishName))
+        ) {
+          targetEmployee = e;
+          break;
+        }
+      }
+
+      if (!targetEmployee && context?.currentEmployeeId) {
+        targetEmployee = employees.find(e => e.EmployeeID === context.currentEmployeeId);
+      }
+
+      if (targetEmployee) {
+        // Find employee's specific records
+        const empRecords = records.filter((c: any) => 
+          c.employeeId === targetEmployee!.EmployeeID || 
+          c.employeeCode === targetEmployee!.EmployeeID || 
+          c.EmployeeID === targetEmployee!.EmployeeID ||
+          (targetEmployee!.EmployeeCode && (c.employeeCode === String(targetEmployee!.EmployeeCode) || c.employeeId === String(targetEmployee!.EmployeeCode)))
+        );
+
+        if (!empRecords.length) {
+          const empDisplayName = this.formatEmployeeLabel(targetEmployee);
+          return {
+            type: 'TEXT',
+            module: 'COMMISSIONS',
+            title: `تقرير عمولات الموظف: ${empDisplayName}`,
+            summaryText: `لم يتم العثور على أي حركات أو سجلات عمولات مسجلة للموظف **${empDisplayName}** في قاعدة البيانات.`
+          };
+        }
+
+        const totalEarned = empRecords.reduce((sum: number, c: any) => sum + extractCommission(c), 0);
+        const totalRequired = empRecords.reduce((sum: number, c: any) => sum + extractRequired(c), 0);
+        const totalPaid = empRecords.reduce((sum: number, c: any) => sum + extractPaid(c), 0);
+        const remainingCollection = Math.max(0, totalRequired - totalPaid);
+
+        const empDisplayName = this.formatEmployeeLabel(targetEmployee);
+
+        return {
+          type: 'METRICS',
+          module: 'COMMISSIONS',
+          title: `تقرير عمولات الموظف: ${empDisplayName}`,
+          summaryText: `إجمالي عمولات الموظف **${empDisplayName}** المسجلة: **${totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س** (${empRecords.length} حركة). المطلوب تحصيله: **${totalRequired.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**، المسدد منه: **${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**، والمتبقي للتحصيل: **${remainingCollection.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**.`,
+          kpis: [
+            { label: 'إجمالي العمولات المستحقة', value: `${totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`, color: 'text-indigo-600' },
+            { label: 'المطلوب تحصيله', value: `${totalRequired.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`, color: 'text-slate-700' },
+            { label: 'المسدد (تسويات)', value: `${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`, color: 'text-emerald-600' },
+            { label: 'المتبقي للتحصيل', value: `${remainingCollection.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`, color: remainingCollection > 0 ? 'text-rose-600' : 'text-emerald-600' }
+          ],
+          tableData: {
+            headers: ['رقم المعاملة', 'التاريخ', 'نوع العمولة', 'صافي العمولة', 'المطلوب تحصيله', 'المسدد', 'المتبقي'],
+            rows: empRecords.map((c: any) => {
+              const recComm = extractCommission(c);
+              const recReq = extractRequired(c);
+              const recPaid = extractPaid(c);
+              const recRem = Math.max(0, recReq - recPaid);
+              return [
+                c.transactionNo || c.id || '-',
+                c.formattedDate || (c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar-SA') : '-'),
+                c.commissionTypeLabel || (c.commissionType === 'PRODUCT_COMMISSION' ? 'منتجات' : 'عدد طلبات'),
+                `${recComm.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+                `${recReq.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+                `${recPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+                `${recRem.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`
+              ];
+            })
+          }
+        };
+      }
+
+      // General Aggregate Commission Report across all agents
+      const totalCommissionsAll = records.reduce((sum: number, c: any) => sum + extractCommission(c), 0);
+      const totalRequiredAll = records.reduce((sum: number, c: any) => sum + extractRequired(c), 0);
+      const totalPaidAll = records.reduce((sum: number, c: any) => sum + extractPaid(c), 0);
+      const totalRemainingAll = Math.max(0, totalRequiredAll - totalPaidAll);
+
+      // Aggregate by Agent
+      const agentMap: Record<string, { name: string; code: string; commission: number; required: number; paid: number; remaining: number }> = {};
+      
+      records.forEach((c: any) => {
+        const key = c.employeeId || c.employeeCode || c.employeeName || 'unknown';
+        if (!agentMap[key]) {
+          const empObj = employees.find(e => e.EmployeeID === key || String(e.EmployeeCode) === key);
+          const name = empObj ? (empObj.ArabicName || empObj.EnglishName || c.employeeName) : (c.employeeName || 'مندوب');
+          const code = empObj ? (empObj.EmployeeCode || empObj.EmployeeID) : (c.employeeCode || c.employeeId || '-');
+          agentMap[key] = {
+            name: `${name} — ${code}`,
+            code: String(code),
+            commission: 0,
+            required: 0,
+            paid: 0,
+            remaining: 0
+          };
+        }
+        const comm = extractCommission(c);
+        const req = extractRequired(c);
+        const paid = extractPaid(c);
+        agentMap[key].commission += comm;
+        agentMap[key].required += req;
+        agentMap[key].paid += paid;
+        agentMap[key].remaining = Math.max(0, agentMap[key].required - agentMap[key].paid);
+      });
+
+      const agentList = Object.values(agentMap).sort((a, b) => b.commission - a.commission);
 
       return {
-        type: 'METRICS',
+        type: 'REPORT',
         module: 'COMMISSIONS',
-        title: `تقرير عمولات الموظف: ${targetEmployee.ArabicName || targetEmployee.EnglishName} (${targetEmployee.EmployeeID})`,
-        summaryText: `إجمالي عمولات ومستحقات الموظف **${targetEmployee.ArabicName || targetEmployee.EnglishName}** المسجلة في النظام: **${totalEarned.toLocaleString('en-US')} ريال**، والمصروف منها **${totalPaid.toLocaleString('en-US')} ريال**، مع متبقي مستحق قدره **${remainingDue.toLocaleString('en-US')} ريال**.`,
+        title: 'تقرير العمولات والتحصيل المجمع لجميع المندوبين',
+        summaryText: `إجمالي العمولات المستحقة لجميع المندوبين: **${totalCommissionsAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س** (${records.length} سجل). إجمالي المطلوب تحصيله: **${totalRequiredAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**، المسدد منه: **${totalPaidAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**، والمتبقي غير المحصل: **${totalRemainingAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**.`,
         kpis: [
-          { label: 'إجمالي العمولات', value: `${totalEarned.toLocaleString('en-US')} ريال`, color: 'text-indigo-600' },
-          { label: 'المبالغ المصروفة', value: `${totalPaid.toLocaleString('en-US')} ريال`, color: 'text-emerald-600' },
-          { label: 'المستحق المتبقي', value: `${remainingDue.toLocaleString('en-US')} ريال`, color: remainingDue > 0 ? 'text-amber-600' : 'text-slate-600' }
+          { label: 'إجمالي العمولات المستحقة', value: `${totalCommissionsAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`, color: 'text-indigo-600' },
+          { label: 'المطلوب تحصيله', value: `${totalRequiredAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س` },
+          { label: 'المبالغ المحصلة (تسويات)', value: `${totalPaidAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`, color: 'text-emerald-600' },
+          { label: 'المتبقي للتحصيل', value: `${totalRemainingAll.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`, color: totalRemainingAll > 0 ? 'text-rose-600' : 'text-emerald-600' }
         ],
         tableData: {
-          headers: ['الفترة / التاريخ', 'إجمالي العمولة', 'المصروف', 'المتبقي', 'الحالة'],
-          rows: empRecords.length ? empRecords.map((c: any) => [
-            c.month || c.date || c.period || 'الشهر الحالي',
-            `${(Number(c.totalCommission) || Number(c.amount) || 0).toLocaleString('en-US')} ريال`,
-            `${(Number(c.paidAmount) || 0).toLocaleString('en-US')} ريال`,
-            `${((Number(c.totalCommission) || Number(c.amount) || 0) - (Number(c.paidAmount) || 0)).toLocaleString('en-US')} ريال`,
-            c.status || 'مكتمل'
-          ]) : [[
-            'الشهر الحالي',
-            '0 ريال',
-            '0 ريال',
-            '0 ريال',
-            'لا توجد حركات'
-          ]]
+          headers: ['المندوب', 'إجمالي العمولات', 'المطلوب تحصيله', 'المحصل', 'المتبقي'],
+          rows: agentList.slice(0, 15).map(a => [
+            a.name,
+            `${a.commission.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+            `${a.required.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+            `${a.paid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+            `${a.remaining.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`
+          ])
         }
       };
+    } catch (err: any) {
+      return {
+        type: 'TEXT',
+        module: 'COMMISSIONS',
+        title: 'خطأ في معالجة العمولات',
+        summaryText: `⚠️ تعذر إتمام استعلام العمولات: ${err.message || 'خطأ غير متوقع أثناء معالجة البيانات'}.`
+      };
     }
-
-    // General Aggregate Commission Report
-    const totalCommissionsAll = records.reduce((sum: number, c: any) => sum + (Number(c.totalCommission) || Number(c.netAmount) || Number(c.amount) || 0), 0);
-    const totalPaidAll = records.reduce((sum: number, c: any) => sum + (Number(c.paidAmount) || 0), 0);
-    const totalPendingAll = totalCommissionsAll - totalPaidAll;
-
-    return {
-      type: 'REPORT',
-      module: 'COMMISSIONS',
-      title: 'تقرير العمولات والمستحقات المجمعة لكافة المناديب',
-      summaryText: `إجمالي العمولات المسجلة في النظام يبلغ **${totalCommissionsAll.toLocaleString('en-US')} ريال**، تم صرف **${totalPaidAll.toLocaleString('en-US')} ريال** منها، ويتبقى مبالغ مستحقة معلقة قدرها **${totalPendingAll.toLocaleString('en-US')} ريال**.`,
-      kpis: [
-        { label: 'إجمالي العمولات', value: `${totalCommissionsAll.toLocaleString('en-US')} ريال` },
-        { label: 'المبالغ المصروفة', value: `${totalPaidAll.toLocaleString('en-US')} ريال`, color: 'text-emerald-600' },
-        { label: 'المبالغ المعلقة', value: `${totalPendingAll.toLocaleString('en-US')} ريال`, color: 'text-amber-600' }
-      ],
-      tableData: {
-        headers: ['الموظف', 'رقم الموظف', 'إجمالي العمولة', 'المصروف', 'المعلق'],
-        rows: records.slice(0, 10).map((c: any) => [
-          c.employeeName || 'مندوب مبيعات',
-          c.employeeId || c.employeeCode || '-',
-          `${(Number(c.totalCommission) || Number(c.amount) || 0).toLocaleString('en-US')} ريال`,
-          `${(Number(c.paidAmount) || 0).toLocaleString('en-US')} ريال`,
-          `${((Number(c.totalCommission) || Number(c.amount) || 0) - (Number(c.paidAmount) || 0)).toLocaleString('en-US')} ريال`
-        ])
-      }
-    };
   }
 
   // --- HANDLER: Fleet Intent ---
   private async handleFleetIntent(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
-    const vehRes = await fleetService.getVehicles(companyId);
-    const vehicles: Vehicle[] = (vehRes.data || []).filter(v => !v.IsDeleted);
+    try {
+      const vehRes = await fleetService.getVehicles(companyId);
+      if (vehRes.error) {
+        return {
+          type: 'TEXT',
+          module: 'FLEET',
+          title: 'تنبيه الاتصال بالأسطول',
+          summaryText: `⚠️ تعذر استرجاع بيانات الأسطول من الخادم (${vehRes.error.details || vehRes.error.code || 'خطأ في الاتصال'}).`
+        };
+      }
 
-    const now = new Date();
+      const vehicles: Vehicle[] = (vehRes.data || []).filter(v => !v.IsDeleted);
+      const now = new Date();
 
-    // 1. Insurance Expiry query
-    if (prompt.includes('تأمين')) {
-      const expiringSoon = vehicles.filter(v => {
-        if (!v.Insurance_Expiry) return false;
-        const diffDays = Math.ceil((new Date(v.Insurance_Expiry).getTime() - now.getTime()) / (1000 * 3600 * 24));
-        return diffDays <= 60;
-      });
+      // 1. Insurance Expiry query
+      if (prompt.includes('تأمين')) {
+        const expiringSoon = vehicles.filter(v => {
+          if (!v.Insurance_Expiry) return false;
+          const diffDays = Math.ceil((new Date(v.Insurance_Expiry).getTime() - now.getTime()) / (1000 * 3600 * 24));
+          return diffDays <= 60;
+        });
 
-      return {
-        type: 'TABLE',
-        module: 'FLEET',
-        title: 'تقرير وثائق التأمين القريبة من الانتهاء (خلال 60 يوماً)',
-        summaryText: `تم العثور على **${expiringSoon.length} مركبة** ينتهي تأمينها قريباً أو منتهي الصلاحية:`,
-        kpis: [
-          { label: 'مركبات بحاجة لتجديد التأمين', value: expiringSoon.length, color: expiringSoon.length > 0 ? 'text-rose-600' : 'text-emerald-600' },
-          { label: 'إجمالي الأسطول', value: vehicles.length }
-        ],
-        tableData: {
-          headers: ['رقم اللوحة', 'المركبة', 'السائق المسند', 'تاريخ انتهاء التأمين', 'الأيام المتبقية'],
-          rows: expiringSoon.map(v => {
-            const days = Math.ceil((new Date(v.Insurance_Expiry!).getTime() - now.getTime()) / (1000 * 3600 * 24));
-            return [
+        return {
+          type: 'TABLE',
+          module: 'FLEET',
+          title: 'تقرير وثائق التأمين القريبة من الانتهاء (خلال 60 يوماً)',
+          summaryText: `تم العثور على **${expiringSoon.length} مركبة** ينتهي تأمينها قريباً أو منتهي الصلاحية:`,
+          kpis: [
+            { label: 'مركبات بحاجة لتجديد التأمين', value: expiringSoon.length, color: expiringSoon.length > 0 ? 'text-rose-600' : 'text-emerald-600' },
+            { label: 'إجمالي الأسطول', value: vehicles.length }
+          ],
+          tableData: {
+            headers: ['رقم اللوحة', 'المركبة', 'السائق المسند', 'تاريخ انتهاء التأمين', 'الأيام المتبقية'],
+            rows: expiringSoon.map(v => {
+              const days = Math.ceil((new Date(v.Insurance_Expiry!).getTime() - now.getTime()) / (1000 * 3600 * 24));
+              const driverLabel = v.Primary_Driver_Name ? `${v.Primary_Driver_Name}${v.Primary_Driver_ID ? ` — ${v.Primary_Driver_ID}` : ''}` : 'بدون سائق';
+              return [
+                v.Plate_Number,
+                `${v.Brand} ${v.Model} (${v.Manufacturing_Year || v.Year || ''})`,
+                driverLabel,
+                v.Insurance_Expiry || '-',
+                days < 0 ? `منتهي منذ ${Math.abs(days)} يوم` : `${days} يوم متبقي`
+              ];
+            })
+          }
+        };
+      }
+
+      // 2. Readiness & Maintenance query
+      if (prompt.includes('صيانة') || prompt.includes('غير جاهز') || prompt.includes('جاهزية')) {
+        const inMaint = vehicles.filter(v => v.Operational_Status === 'IN_MAINTENANCE');
+        const lowReadiness = vehicles.filter(v => (v.Readiness_Index || 100) < 70);
+
+        return {
+          type: 'TABLE',
+          module: 'FLEET',
+          title: 'تقرير جاهزية الأسطول والمركبات في الصيانة',
+          summaryText: `يوجد حالياً **${inMaint.length} مركبة** قيد الصيانة، و **${lowReadiness.length} مركبة** بمؤشر جاهزية منخفض (< 70%):`,
+          kpis: [
+            { label: 'في الصيانة', value: inMaint.length, color: 'text-amber-600' },
+            { label: 'جاهزية منخفضة', value: lowReadiness.length, color: 'text-rose-600' },
+            { label: 'نسبة الجاهزية العامة', value: `${Math.round(vehicles.reduce((acc, v) => acc + (v.Readiness_Index || 100), 0) / (vehicles.length || 1))}%` }
+          ],
+          tableData: {
+            headers: ['رقم اللوحة', 'المركبة', 'الحالة التشغيلية', 'مؤشر الجاهزية', 'السائق'],
+            rows: [...inMaint, ...lowReadiness.filter(v => !inMaint.includes(v))].map(v => [
               v.Plate_Number,
-              `${v.Brand} ${v.Model} (${v.Manufacturing_Year || v.Year || ''})`,
-              v.Primary_Driver_Name || 'بدون سائق',
-              v.Insurance_Expiry || '-',
-              days < 0 ? `منتهي منذ ${Math.abs(days)} يوم` : `${days} يوم متبقي`
-            ];
-          })
-        }
-      };
-    }
+              `${v.Brand} ${v.Model}`,
+              v.Operational_Status === 'IN_MAINTENANCE' ? 'في الصيانة' : 'نشط',
+              `${v.Readiness_Index || 100}%`,
+              v.Primary_Driver_Name ? `${v.Primary_Driver_Name}${v.Primary_Driver_ID ? ` — ${v.Primary_Driver_ID}` : ''}` : 'بدون سائق'
+            ])
+          }
+        };
+      }
 
-    // 2. Readiness & Maintenance query
-    if (prompt.includes('صيانة') || prompt.includes('غير جاهز') || prompt.includes('جاهزية')) {
-      const inMaint = vehicles.filter(v => v.Operational_Status === 'IN_MAINTENANCE');
-      const lowReadiness = vehicles.filter(v => (v.Readiness_Index || 100) < 70);
+      // Default Fleet Summary
+      const activeCount = vehicles.filter(v => v.Operational_Status === 'ACTIVE').length;
+      const maintCount = vehicles.filter(v => v.Operational_Status === 'IN_MAINTENANCE').length;
+      const totalCost = vehicles.reduce((sum, v) => sum + (v.Total_Cost_MTD || 0), 0);
 
       return {
-        type: 'TABLE',
+        type: 'REPORT',
         module: 'FLEET',
-        title: 'تقرير جاهزية الأسطول والمركبات في الصيانة',
-        summaryText: `يوجد حالياً **${inMaint.length} مركبة** قيد الصيانة، و **${lowReadiness.length} مركبة** بمؤشر جاهزية منخفض (< 70%):`,
+        title: 'الملخص الشامل لأسطول المركبات',
+        summaryText: `يحتوي الأسطول على **${vehicles.length} مركبة** مسجلة، منها **${activeCount} مركبة نشطة** و **${maintCount} في الصيانة**. إجمالي المصروفات التراكمية المسجلة: **${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**.`,
         kpis: [
-          { label: 'في الصيانة', value: inMaint.length, color: 'text-amber-600' },
-          { label: 'جاهزية منخفضة', value: lowReadiness.length, color: 'text-rose-600' },
-          { label: 'نسبة الجاهزية العامة', value: `${Math.round(vehicles.reduce((acc, v) => acc + (v.Readiness_Index || 100), 0) / (vehicles.length || 1))}%` }
+          { label: 'إجمالي المركبات', value: vehicles.length },
+          { label: 'المركبات النشطة', value: activeCount, color: 'text-emerald-600' },
+          { label: 'قيد الصيانة', value: maintCount, color: 'text-amber-600' },
+          { label: 'إجمالي تكاليف الأسطول', value: `${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س` }
         ],
         tableData: {
-          headers: ['رقم اللوحة', 'المركبة', 'الحالة التشغيلية', 'مؤشر الجاهزية', 'السائق'],
-          rows: [...inMaint, ...lowReadiness.filter(v => !inMaint.includes(v))].map(v => [
+          headers: ['رقم اللوحة', 'الماركة والموديل', 'السائق', 'العداد الحالي', 'الحالة'],
+          rows: vehicles.slice(0, 10).map(v => [
             v.Plate_Number,
-            `${v.Brand} ${v.Model}`,
-            v.Operational_Status === 'IN_MAINTENANCE' ? 'في الصيانة' : 'نشط',
-            `${v.Readiness_Index || 100}%`,
-            v.Primary_Driver_Name || 'بدون سائق'
+            `${v.Brand} ${v.Model} (${v.Manufacturing_Year || v.Year || ''})`,
+            v.Primary_Driver_Name ? `${v.Primary_Driver_Name}${v.Primary_Driver_ID ? ` — ${v.Primary_Driver_ID}` : ''}` : 'بدون سائق',
+            `${(v.Current_Odometer || 0).toLocaleString('en-US')} كم`,
+            v.Operational_Status === 'ACTIVE' ? 'نشط' : v.Operational_Status === 'IN_MAINTENANCE' ? 'في الصيانة' : 'خارج الخدمة'
           ])
         }
       };
+    } catch (err: any) {
+      return {
+        type: 'TEXT',
+        module: 'FLEET',
+        title: 'خطأ في معالجة الأسطول',
+        summaryText: `⚠️ تعذر استرجاع بيانات الأسطول: ${err.message || 'خطأ في الاتصال بالخادم'}.`
+      };
     }
-
-    // Default Fleet Summary
-    const activeCount = vehicles.filter(v => v.Operational_Status === 'ACTIVE').length;
-    const maintCount = vehicles.filter(v => v.Operational_Status === 'IN_MAINTENANCE').length;
-    const totalCost = vehicles.reduce((sum, v) => sum + (v.Total_Cost_MTD || 0), 0);
-
-    return {
-      type: 'REPORT',
-      module: 'FLEET',
-      title: 'الملخص الشامل لأسطول المركبات',
-      summaryText: `يحتوي الأسطول على **${vehicles.length} مركبة** مسجلة، منها **${activeCount} مركبة نشطة** و **${maintCount} في الصيانة**. إجمالي المصروفات التراكمية المسجلة: **${totalCost.toLocaleString('en-US')} ريال**.`,
-      kpis: [
-        { label: 'إجمالي المركبات', value: vehicles.length },
-        { label: 'المركبات النشطة', value: activeCount, color: 'text-emerald-600' },
-        { label: 'قيد الصيانة', value: maintCount, color: 'text-amber-600' },
-        { label: 'إجمالي تكاليف الأسطول', value: `${totalCost.toLocaleString('en-US')} ريال` }
-      ],
-      tableData: {
-        headers: ['رقم اللوحة', 'الماركة والموديل', 'السائق', 'العداد الحالي', 'الحالة'],
-        rows: vehicles.slice(0, 10).map(v => [
-          v.Plate_Number,
-          `${v.Brand} ${v.Model} (${v.Manufacturing_Year || v.Year || ''})`,
-          v.Primary_Driver_Name || 'بدون سائق',
-          `${(v.Current_Odometer || 0).toLocaleString('en-US')} كم`,
-          v.Operational_Status === 'ACTIVE' ? 'نشط' : v.Operational_Status === 'IN_MAINTENANCE' ? 'في الصيانة' : 'خارج الخدمة'
-        ])
-      }
-    };
   }
 
   // --- HANDLER: Employees ---
   private async handleEmployeesIntent(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
-    const [empRes, vehRes] = await Promise.all([
-      employeeService.getEmployees(companyId),
-      fleetService.getVehicles(companyId)
-    ]);
+    try {
+      const [empRes, vehRes] = await Promise.all([
+        employeeService.getEmployees(companyId),
+        fleetService.getVehicles(companyId)
+      ]);
 
-    const employees: Employee[] = empRes.data || [];
-    const vehicles: Vehicle[] = (vehRes.data || []).filter(v => !v.IsDeleted);
-
-    const activeEmployees = employees.filter(e => e.Status === 'ACTIVE' || !e.Status);
-
-    return {
-      type: 'TABLE',
-      module: 'EMPLOYEES',
-      title: 'بيانات الموظفين والمناديب والمركبات المسندة إليهم',
-      summaryText: `يوجد **${employees.length} موظف** مسجل بالنظام (**${activeEmployees.length} نشط**). فيما يلي تفاصيل الموظفين والمركبات المرتبطة بهم:`,
-      kpis: [
-        { label: 'إجمالي الموظفين', value: employees.length },
-        { label: 'الموظفون النشطون', value: activeEmployees.length, color: 'text-emerald-600' },
-        { label: 'المناديب المسند لهم مركبات', value: vehicles.filter(v => v.Primary_Driver_ID).length }
-      ],
-      tableData: {
-        headers: ['رقم الموظف (ID)', 'الاسم', 'المسمى الوظيفي', 'المركبة المسندة', 'رقم اللوحة', 'الحالة'],
-        rows: employees.slice(0, 15).map(e => {
-          const assignedVeh = vehicles.find(v => v.Primary_Driver_ID === e.EmployeeID || v.Primary_Driver_ID === String(e.EmployeeCode) || v.Assigned_Employee_ID === e.EmployeeID);
-          return [
-            e.EmployeeID,
-            e.ArabicName || e.EnglishName || 'موظف',
-            e.JobTitleAR || e.JobTitleEN || 'مندوب مبيعات',
-            assignedVeh ? `${assignedVeh.Brand} ${assignedVeh.Model}` : 'لا يوجد',
-            assignedVeh ? assignedVeh.Plate_Number : '-',
-            e.Status === 'ACTIVE' || !e.Status ? 'نشط' : 'غير نشط'
-          ];
-        })
+      if (empRes.error) {
+        return {
+          type: 'TEXT',
+          module: 'EMPLOYEES',
+          title: 'تنبيه بيانات الموظفين',
+          summaryText: `⚠️ تعذر استرجاع بيانات الموظفين من الخادم (${empRes.error.details || empRes.error.code || 'خطأ في الاتصال'}).`
+        };
       }
-    };
+
+      const employees: Employee[] = empRes.data || [];
+      const vehicles: Vehicle[] = (vehRes.data || []).filter(v => !v.IsDeleted);
+
+      const activeEmployees = employees.filter(e => e.Status === 'ACTIVE' || !e.Status);
+
+      return {
+        type: 'TABLE',
+        module: 'EMPLOYEES',
+        title: 'بيانات الموظفين والمناديب والمركبات المسندة إليهم',
+        summaryText: `يوجد **${employees.length} موظف** مسجل بالنظام (**${activeEmployees.length} نشط**). تفاصيل الموظفين والمركبات المرتبطة بهم:`,
+        kpis: [
+          { label: 'إجمالي الموظفين', value: employees.length },
+          { label: 'الموظفون النشطون', value: activeEmployees.length, color: 'text-emerald-600' },
+          { label: 'المناديب المسند لهم مركبات', value: vehicles.filter(v => v.Primary_Driver_ID).length }
+        ],
+        tableData: {
+          headers: ['الموظف (الاسم — الرقم)', 'المسمى الوظيفي', 'المركبة المسندة', 'رقم اللوحة', 'الحالة'],
+          rows: employees.slice(0, 15).map(e => {
+            const assignedVeh = vehicles.find(v => v.Primary_Driver_ID === e.EmployeeID || v.Primary_Driver_ID === String(e.EmployeeCode) || v.Assigned_Employee_ID === e.EmployeeID);
+            return [
+              this.formatEmployeeLabel(e),
+              e.JobTitleAR || e.JobTitleEN || 'مندوب مبيعات',
+              assignedVeh ? `${assignedVeh.Brand} ${assignedVeh.Model}` : 'لا يوجد',
+              assignedVeh ? assignedVeh.Plate_Number : '-',
+              e.Status === 'ACTIVE' || !e.Status ? 'نشط' : 'غير نشط'
+            ];
+          })
+        }
+      };
+    } catch (err: any) {
+      return {
+        type: 'TEXT',
+        module: 'EMPLOYEES',
+        title: 'خطأ في بيانات الموظفين',
+        summaryText: `⚠️ تعذر استرجاع بيانات الموظفين: ${err.message || 'خطأ غير متوقع'}.`
+      };
+    }
   }
 
   // --- HANDLER: Inventory & Products ---
   private async handleInventoryIntent(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
-    const prodRes = await productService.getProducts(companyId);
-    const products = prodRes.data || [];
-
-    const criticalItems = products.filter((p: any) => (p.Quantity || p.stock || 0) <= (p.MinQuantity || p.minStock || 5));
-
-    return {
-      type: 'TABLE',
-      module: 'INVENTORY',
-      title: 'تقرير المخزون والمنتجات الحرجة',
-      summaryText: `يوجد **${products.length} صنف** في المستودع. المنتجات المنخفضة أو الحرجة التي تحتاج لإعادة طلب: **${criticalItems.length} صنف**.`,
-      kpis: [
-        { label: 'إجمالي الأصناف', value: products.length },
-        { label: 'المنتجات الحرجة', value: criticalItems.length, color: criticalItems.length > 0 ? 'text-rose-600' : 'text-emerald-600' }
-      ],
-      tableData: {
-        headers: ['رمز المنتج', 'اسم الصنف', 'التصنيف', 'الكمية المتوفرة', 'السعر', 'الحالة'],
-        rows: products.slice(0, 12).map((p: any) => [
-          p.ProductID || p.code || p.id || '-',
-          p.ArabicName || p.EnglishName || p.name || 'منتج',
-          p.Category || p.category || 'عام',
-          `${p.Quantity || p.stock || 0} وحدة`,
-          `${(p.UnitPrice || p.price || 0).toLocaleString('en-US')} ريال`,
-          (p.Quantity || p.stock || 0) <= (p.MinQuantity || p.minStock || 5) ? 'مخزون حرج' : 'متوفر'
-        ])
+    try {
+      const prodRes = await productService.getProducts(companyId);
+      if (prodRes.error) {
+        return {
+          type: 'TEXT',
+          module: 'INVENTORY',
+          title: 'تنبيه المخزون',
+          summaryText: `⚠️ تعذر استرجاع بيانات المخزون من الخادم (${prodRes.error.details || prodRes.error.code || 'خطأ في الاتصال'}).`
+        };
       }
-    };
+
+      const products = prodRes.data || [];
+      const criticalItems = products.filter((p: any) => (p.Quantity || p.stock || 0) <= (p.MinQuantity || p.minStock || 5));
+
+      return {
+        type: 'TABLE',
+        module: 'INVENTORY',
+        title: 'تقرير المخزون والمنتجات الحرجة',
+        summaryText: `يوجد **${products.length} صنف** في المستودع. المنتجات المنخفضة أو الحرجة التي تحتاج لإعادة طلب: **${criticalItems.length} صنف**.`,
+        kpis: [
+          { label: 'إجمالي الأصناف', value: products.length },
+          { label: 'المنتجات الحرجة', value: criticalItems.length, color: criticalItems.length > 0 ? 'text-rose-600' : 'text-emerald-600' }
+        ],
+        tableData: {
+          headers: ['رمز الصنف', 'اسم الصنف', 'التصنيف', 'الكمية المتوفرة', 'سعر الوحدة', 'الحالة'],
+          rows: products.slice(0, 12).map((p: any) => [
+            p.ProductCode || p.ProductID || p.code || p.id || '-',
+            p.ArabicName || p.EnglishName || p.name || 'منتج',
+            p.Category || p.category || 'عام',
+            `${p.Quantity || p.stock || 0} وحدة`,
+            `${(p.UnitPrice || p.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+            (p.Quantity || p.stock || 0) <= (p.MinQuantity || p.minStock || 5) ? 'مخزون حرج' : 'متوفر'
+          ])
+        }
+      };
+    } catch (err: any) {
+      return {
+        type: 'TEXT',
+        module: 'INVENTORY',
+        title: 'خطأ في بيانات المخزون',
+        summaryText: `⚠️ تعذر استرجاع بيانات المخزون: ${err.message || 'خطأ غير متوقع'}.`
+      };
+    }
   }
 
   // --- HANDLER: Quotes ---
   private async handleQuotesIntent(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
-    const quoteRes = await quoteService.getQuotes(companyId);
-    const quotes = quoteRes.data || [];
-
-    const totalVal = quotes.reduce((sum: number, q: any) => sum + (Number(q.totalAmount) || Number(q.total) || 0), 0);
-    const openQuotes = quotes.filter((q: any) => q.status === 'DRAFT' || q.status === 'PENDING' || !q.status);
-
-    return {
-      type: 'TABLE',
-      module: 'QUOTES',
-      title: 'تقرير عروض الأسعار المسجلة في النظام',
-      summaryText: `تم تسجيل **${quotes.length} عرض سعر** بقيمة إجمالية **${totalVal.toLocaleString('en-US')} ريال**. عروض الأسعار المفتوحة / المعلقة: **${openQuotes.length}**.`,
-      kpis: [
-        { label: 'إجمالي عروض الأسعار', value: quotes.length },
-        { label: 'العروض المفتوحة', value: openQuotes.length, color: 'text-indigo-600' },
-        { label: 'إجمالي القيمة', value: `${totalVal.toLocaleString('en-US')} ريال` }
-      ],
-      tableData: {
-        headers: ['رقم العرض', 'العميل', 'التاريخ', 'القيمة الإجمالية', 'الحالة'],
-        rows: quotes.slice(0, 10).map((q: any) => [
-          q.quoteNumber || q.id || '-',
-          q.customerName || 'عميل',
-          q.date || '-',
-          `${(Number(q.totalAmount) || Number(q.total) || 0).toLocaleString('en-US')} ريال`,
-          q.status || 'مفتوح'
-        ])
+    try {
+      const quoteRes = await quoteService.getQuotes(companyId);
+      if (quoteRes.error) {
+        return {
+          type: 'TEXT',
+          module: 'QUOTES',
+          title: 'تنبيه عروض الأسعار',
+          summaryText: `⚠️ تعذر استرجاع بيانات عروض الأسعار من الخادم (${quoteRes.error.details || quoteRes.error.code || 'خطأ في الاتصال'}).`
+        };
       }
-    };
+
+      const quotes = quoteRes.data || [];
+      const totalVal = quotes.reduce((sum: number, q: any) => sum + (Number(q.totalAmount) || Number(q.total) || 0), 0);
+      const openQuotes = quotes.filter((q: any) => q.status === 'DRAFT' || q.status === 'PENDING' || !q.status);
+
+      return {
+        type: 'TABLE',
+        module: 'QUOTES',
+        title: 'تقرير عروض الأسعار المسجلة في النظام',
+        summaryText: `تم تسجيل **${quotes.length} عرض سعر** بقيمة إجمالية **${totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س**. عروض الأسعار المفتوحة / المعلقة: **${openQuotes.length}**.`,
+        kpis: [
+          { label: 'إجمالي عروض الأسعار', value: quotes.length },
+          { label: 'العروض المفتوحة', value: openQuotes.length, color: 'text-indigo-600' },
+          { label: 'إجمالي القيمة', value: `${totalVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س` }
+        ],
+        tableData: {
+          headers: ['رقم العرض', 'العميل', 'التاريخ', 'القيمة الإجمالية', 'الحالة'],
+          rows: quotes.slice(0, 10).map((q: any) => [
+            q.QuoteNumber || q.quoteNumber || q.id || '-',
+            q.CustomerName || q.customerName || 'عميل',
+            q.Date || q.date || '-',
+            `${(Number(q.totalAmount) || Number(q.total) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+            q.Status || q.status || 'مفتوح'
+          ])
+        }
+      };
+    } catch (err: any) {
+      return {
+        type: 'TEXT',
+        module: 'QUOTES',
+        title: 'خطأ في عروض الأسعار',
+        summaryText: `⚠️ تعذر استرجاع بيانات عروض الأسعار: ${err.message || 'خطأ غير متوقع'}.`
+      };
+    }
   }
 
   // --- HANDLER: Cross-Module Overview ---

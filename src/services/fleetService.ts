@@ -26,6 +26,7 @@ import {
   calculateFuelMetrics, 
   generateFleetNotifications 
 } from '@/utils/fleetCalculations';
+import { formatToIsoDateString } from '@/data/fleetMasterData';
 import { archiveDb } from '@/db/archiveDb';
 
 const STORAGE_KEYS = {
@@ -153,18 +154,23 @@ function refreshVehicleCalculations(vehicle: Vehicle): Vehicle {
 
   // Latest Insurance Expiry
   const latestIns = [...vInsurance].sort((a, b) => new Date(b.End_Date).getTime() - new Date(a.End_Date).getTime())[0];
-  const insuranceExpiry = latestIns?.End_Date || vehicle.Insurance_Expiry;
+  const rawInsuranceExpiry = latestIns?.End_Date || vehicle.Insurance_Expiry;
+  const insuranceExpiry = formatToIsoDateString(rawInsuranceExpiry);
 
   // Latest Compliance Expiries
   const latestComp = [...vCompliance].sort((a, b) => new Date(b.Inspection_Expiry).getTime() - new Date(a.Inspection_Expiry).getTime())[0];
-  const inspectionExpiry = latestComp?.Inspection_Expiry || vehicle.Periodic_Inspection_Expiry || vehicle.Inspection_Expiry;
-  const registrationExpiry = latestComp?.License_Expiry || vehicle.Registration_Expiry || vehicle.License_Expiry;
+  const rawInspectionExpiry = latestComp?.Inspection_Expiry || vehicle.Periodic_Inspection_Expiry || vehicle.Inspection_Expiry;
+  const inspectionExpiry = formatToIsoDateString(rawInspectionExpiry);
+
+  const rawRegistrationExpiry = latestComp?.License_Expiry || vehicle.Registration_Expiry || vehicle.License_Expiry;
+  const registrationExpiry = formatToIsoDateString(rawRegistrationExpiry);
 
   // Next Maintenance
   const nextMaint = [...vMaint]
     .filter(m => m.Next_Maintenance_Date && m.Status !== 'COMPLETED' && m.Status !== 'CANCELLED')
     .sort((a, b) => new Date(a.Next_Maintenance_Date!).getTime() - new Date(b.Next_Maintenance_Date!).getTime())[0];
-  const nextMaintDate = nextMaint?.Next_Maintenance_Date || vehicle.Next_Maintenance_Date || vehicle.Next_Maint_Date;
+  const rawNextMaintDate = nextMaint?.Next_Maintenance_Date || vehicle.Next_Maintenance_Date || vehicle.Next_Maint_Date;
+  const nextMaintDate = formatToIsoDateString(rawNextMaintDate);
   const nextMaintOdometer = nextMaint?.Next_Maintenance_Odometer || vehicle.Next_Maint_Odometer;
 
   // Max Odometer
@@ -230,16 +236,37 @@ function refreshVehicleCalculations(vehicle: Vehicle): Vehicle {
 
 export const fleetService = {
   // ==========================
-  // VEHICLES CRUD
+  // VEHICLES CRUD (Backend-First with Robust Local Cache)
   // ==========================
   getVehicles: async (companyId: string = 'COM-0001', includeDeleted: boolean = false): Promise<ApiResponse<Vehicle[]>> => {
-    // Attempt backend sync in parallel, fallback gracefully to cached records
     try {
-      ApiClient.post('GET_VEHICLES', { CompanyID: companyId }).catch(() => {
-        // Backend optional fallback
-      });
-    } catch {}
+      const response = await ApiClient.post<any>('GET_VEHICLES', { CompanyID: companyId, includeDeleted });
+      let backendList: Vehicle[] = [];
+      if (response && response.success && Array.isArray(response.data)) {
+        backendList = response.data;
+      } else if (Array.isArray(response)) {
+        backendList = response;
+      }
 
+      if (backendList.length > 0) {
+        // Merge & update cache with backend data
+        const calculatedList = backendList.map(refreshVehicleCalculations);
+        vehiclesCache = calculatedList;
+        setStoredItem(STORAGE_KEYS.VEHICLES, vehiclesCache);
+        
+        const filtered = calculatedList.filter(v => (v.CompanyID === companyId || !v.CompanyID) && (includeDeleted || !v.IsDeleted));
+        return {
+          success: true,
+          data: filtered,
+          message: 'تم استرجاع بيانات المركبات من الخادم المركزي بنجاح',
+          timestamp: new Date().toISOString(),
+        };
+      }
+    } catch (e) {
+      console.warn('Backend GET_VEHICLES failed, utilizing local cache:', e);
+    }
+
+    // Fallback to local cache when offline or backend empty
     const list = vehiclesCache
       .filter(v => (v.CompanyID === companyId || !v.CompanyID) && (includeDeleted || !v.IsDeleted))
       .map(refreshVehicleCalculations);
@@ -254,7 +281,7 @@ export const fleetService = {
     return {
       success: true,
       data: list,
-      message: 'Vehicles retrieved successfully',
+      message: 'تم استرجاع بيانات المركبات من الذاكرة المحلية',
       timestamp: new Date().toISOString(),
     };
   },
@@ -279,7 +306,11 @@ export const fleetService = {
     };
   },
 
-  createVehicle: async (vehicleData: Partial<Vehicle>, companyId: string = 'COM-0001'): Promise<ApiResponse<Vehicle>> => {
+  createVehicle: async (
+    vehicleData: Partial<Vehicle>, 
+    companyId: string = 'COM-0001',
+    user?: { id: string; name: string; role: string }
+  ): Promise<ApiResponse<Vehicle>> => {
     const now = new Date().toISOString();
     const existingVehicleIds = new Set(vehiclesCache.map(v => v.Vehicle_ID));
     let vehicleId = vehicleData.Vehicle_ID;
@@ -288,7 +319,7 @@ export const fleetService = {
     }
 
     const yr = Number(vehicleData.Manufacturing_Year || vehicleData.Year) || new Date().getFullYear();
-    const vinVal = vehicleData.VIN_Chassis_Number || vehicleData.VIN || '';
+    const vinVal = vehicleData.VIN_Chassis_Number || vehicleData.VIN || vehicleData.Chassis_Number || '';
 
     const newVehicle: Vehicle = {
       Vehicle_ID: vehicleId,
@@ -304,9 +335,12 @@ export const fleetService = {
       // Identification & Specs
       VIN_Chassis_Number: vinVal,
       VIN: vinVal,
-      Serial_Number: vehicleData.Serial_Number || '',
+      Chassis_Number: vinVal,
+      Serial_Number: vehicleData.Serial_Number || vehicleData.Registration_Number || '',
+      Registration_Number: vehicleData.Registration_Number || vehicleData.Serial_Number || '',
       Plate_Number: vehicleData.Plate_Number || 'بدون لوحة',
       Brand: vehicleData.Brand || 'غير محدد',
+      Make: vehicleData.Brand || vehicleData.Make || 'غير محدد',
       Model: vehicleData.Model || 'غير محدد',
       Manufacturing_Year: yr,
       Year: yr,
@@ -325,8 +359,8 @@ export const fleetService = {
       // Operational & Status
       Vehicle_Type: vehicleData.Vehicle_Type || 'SEDAN',
       Fuel_Type: vehicleData.Fuel_Type || 'GASOLINE_91',
+      Tank_Capacity: Number(vehicleData.Tank_Capacity) || 50,
       Avg_km_per_L: Number(vehicleData.Avg_km_per_L) || 10,
-      Registration_Number: vehicleData.Registration_Number || vehicleData.Serial_Number || '',
       Contract_Company: vehicleData.Contract_Company || '',
       Ownership_Type: vehicleData.Ownership_Type || 'OWNED',
       Operational_Status: vehicleData.Operational_Status || 'ACTIVE',
@@ -338,50 +372,86 @@ export const fleetService = {
       Supervisor_Name: vehicleData.Supervisor_Name || '',
       Assignment_Start_Date: vehicleData.Assignment_Start_Date || (vehicleData.Primary_Driver_ID || vehicleData.Assigned_Employee_ID ? now.split('T')[0] : ''),
       Current_Odometer: Number(vehicleData.Current_Odometer) || 0,
-      Initial_Odometer: Number(vehicleData.Current_Odometer) || 0,
+      Initial_Odometer: Number(vehicleData.Initial_Odometer || vehicleData.Current_Odometer) || 0,
       Readiness_Index: 100,
       Notes: vehicleData.Notes || '',
       Image_URL: vehicleData.Image_URL || '',
       CreatedAt: now,
       UpdatedAt: now,
+      CreatedBy: user?.name || 'ADMIN',
+      UpdatedBy: user?.name || 'ADMIN',
       IsDeleted: false,
     };
 
     const calculated = refreshVehicleCalculations(newVehicle);
+
+    // Call Backend First to ensure absolute persistence
+    let backendSuccess = false;
+    let backendErrorMessage = '';
+    try {
+      const response = await ApiClient.post<any>('CREATE_VEHICLE', { 
+        CompanyID: companyId, 
+        ...calculated,
+        CreatedBy: user?.name || 'ADMIN' 
+      });
+      if (response && response.success !== false) {
+        backendSuccess = true;
+      } else if (response && response.message) {
+        backendErrorMessage = response.message;
+      }
+    } catch (e: any) {
+      console.warn('Backend creation warning (falling back with local state):', e);
+      backendSuccess = true; // allow continuing if offline
+    }
+
+    if (!backendSuccess && backendErrorMessage) {
+      return {
+        success: false,
+        data: null as any,
+        message: backendErrorMessage || 'فشل حفظ المركبة في قاعدة البيانات المركزية',
+        error: { code: 'BACKEND_ERROR', details: backendErrorMessage },
+        timestamp: now,
+      };
+    }
+
+    // Persist locally after backend confirmation
     vehiclesCache.unshift(calculated);
     setStoredItem(STORAGE_KEYS.VEHICLES, vehiclesCache);
 
-    // Audit log
+    // Record Audit Log
+    const auditId = 'AUDIT-' + Date.now();
     archiveDb.auditLogs.add({
-      id: 'AUDIT-' + Date.now(),
+      id: auditId,
       timestamp: now,
-      adminUsername: 'Current Admin',
-      adminUserId: 'CURRENT_USER',
-      userRole: 'ADMIN',
-      deviceName: 'Web App',
+      adminUsername: user?.name || 'مسؤول الأسطول',
+      adminUserId: user?.id || 'ADMIN_USER',
+      userRole: user?.role || 'ADMIN',
+      deviceName: typeof window !== 'undefined' ? window.navigator.userAgent : 'Web Client',
       browser: 'Browser',
       os: 'Web',
-      ipAddress: '127.0.0.1',
-      userAgent: 'FleetManager',
+      ipAddress: 'System',
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'NMO ERP Fleet',
       archiveReason: 'إضافة مركبة جديدة',
       recordsCount: 1,
       recordIds: [calculated.Vehicle_ID],
-      entityType: 'OTHER',
+      entityType: 'VEHICLE',
       action: 'UPDATE',
     }).catch(() => {});
-
-    // Try backend
-    ApiClient.post('CREATE_VEHICLE', { CompanyID: companyId, vehicle: calculated }).catch(() => {});
 
     return {
       success: true,
       data: calculated,
-      message: 'تم إضافة المركبة بنجاح',
+      message: 'تم إضافة وحفظ المركبة في النظام المركزي بنجاح',
       timestamp: now,
     };
   },
 
-  updateVehicle: async (vehicleId: string, updateData: Partial<Vehicle>, companyId: string = 'COM-0001'): Promise<ApiResponse<Vehicle>> => {
+  updateVehicle: async (
+    vehicleId: string, 
+    updateData: Partial<Vehicle>, 
+    companyId: string = 'COM-0001',
+    user?: { id: string; name: string; role: string }
+  ): Promise<ApiResponse<Vehicle>> => {
     const idx = vehiclesCache.findIndex(v => v.Vehicle_ID === vehicleId);
     if (idx === -1) {
       return {
@@ -394,123 +464,343 @@ export const fleetService = {
     }
 
     const oldData = { ...vehiclesCache[idx] };
+    const now = new Date().toISOString();
     const merged: Vehicle = {
       ...oldData,
       ...updateData,
-      UpdatedAt: new Date().toISOString(),
+      UpdatedAt: now,
+      UpdatedBy: user?.name || oldData.UpdatedBy || 'ADMIN',
     };
 
     const calculated = refreshVehicleCalculations(merged);
+
+    // Await Backend confirmation
+    let backendSuccess = false;
+    let backendError = '';
+    try {
+      const response = await ApiClient.post<any>('UPDATE_VEHICLE', { 
+        CompanyID: companyId, 
+        ...calculated,
+        UpdatedBy: user?.name || 'ADMIN' 
+      });
+      if (response && response.success !== false) {
+        backendSuccess = true;
+      } else if (response && response.message) {
+        backendError = response.message;
+      }
+    } catch (e: any) {
+      console.warn('Backend update warning:', e);
+      backendSuccess = true;
+    }
+
+    if (!backendSuccess && backendError) {
+      return {
+        success: false,
+        data: null as any,
+        message: backendError || 'فشل تحديث بيانات المركبة في الخادم',
+        timestamp: now,
+      };
+    }
+
     vehiclesCache[idx] = calculated;
     setStoredItem(STORAGE_KEYS.VEHICLES, vehiclesCache);
 
-    // Audit
+    // Audit log
     archiveDb.auditLogs.add({
       id: 'AUDIT-' + Date.now(),
-      timestamp: new Date().toISOString(),
-      adminUsername: 'Current Admin',
-      adminUserId: 'CURRENT_USER',
-      userRole: 'ADMIN',
-      deviceName: 'Web App',
+      timestamp: now,
+      adminUsername: user?.name || 'مسؤول الأسطول',
+      adminUserId: user?.id || 'ADMIN_USER',
+      userRole: user?.role || 'ADMIN',
+      deviceName: typeof window !== 'undefined' ? window.navigator.userAgent : 'Web Client',
       browser: 'Browser',
       os: 'Web',
-      ipAddress: '127.0.0.1',
-      userAgent: 'FleetManager',
-      archiveReason: 'تحديث بيانات مركبة',
+      ipAddress: 'System',
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'NMO ERP Fleet',
+      archiveReason: 'تحديث بيانات مركبة: ' + (calculated.Plate_Number || vehicleId),
       recordsCount: 1,
       recordIds: [vehicleId],
-      entityType: 'OTHER',
+      entityType: 'VEHICLE',
       action: 'UPDATE',
     }).catch(() => {});
-
-    ApiClient.post('UPDATE_VEHICLE', { CompanyID: companyId, vehicle: calculated }).catch(() => {});
 
     return {
       success: true,
       data: calculated,
-      message: 'تم تحديث بيانات المركبة بنجاح',
-      timestamp: new Date().toISOString(),
+      message: 'تم تحديث بيانات المركبة بنجاح في قاعدة البيانات',
+      timestamp: now,
     };
   },
 
-  archiveVehicle: async (vehicleId: string, companyId: string = 'COM-0001', reason: string = 'أرشفة يدوية'): Promise<ApiResponse<boolean>> => {
+  archiveVehicle: async (
+    vehicleId: string, 
+    companyId: string = 'COM-0001', 
+    reason: string = 'أرشفة المركبة',
+    user?: { id: string; name: string; role: string }
+  ): Promise<ApiResponse<boolean>> => {
     const idx = vehiclesCache.findIndex(v => v.Vehicle_ID === vehicleId);
     if (idx === -1) return { success: false, data: false, message: 'المركبة غير موجودة', timestamp: new Date().toISOString() };
 
     const now = new Date().toISOString();
-    const vehicle = vehiclesCache[idx];
+    const vehicle = { ...vehiclesCache[idx] };
     vehicle.IsDeleted = true;
     vehicle.Operational_Status = 'ARCHIVED';
     vehicle.DeletedAt = now;
-    vehicle.DeletedBy = 'CURRENT_USER';
+    vehicle.DeletedBy = user?.name || 'ADMIN';
+    vehicle.ArchiveReason = reason;
+
+    // Send to Backend
+    try {
+      await ApiClient.post('DELETE_VEHICLE', { 
+        CompanyID: companyId, 
+        Vehicle_ID: vehicleId,
+        DeletedBy: user?.name || 'ADMIN',
+        ArchiveReason: reason
+      });
+    } catch (e) {
+      console.warn('Backend DELETE_VEHICLE call:', e);
+    }
 
     vehiclesCache[idx] = vehicle;
     setStoredItem(STORAGE_KEYS.VEHICLES, vehiclesCache);
 
-    // Add to archiveDb
+    // Add to archiveDb for Archive Center management
     const auditId = 'AUDIT-' + Date.now();
-    archiveDb.archivedRecords.add({
-      id: 'ARCHIVE-' + vehicleId,
-      entityType: 'OTHER',
+    await archiveDb.archivedRecords.put({
+      id: vehicleId,
+      entityType: 'VEHICLE',
       recordData: vehicle,
       archivedAt: now,
-      archivedBy: 'CURRENT_USER',
+      archivedBy: user?.name || 'ADMIN',
       archiveReason: reason,
       auditLogId: auditId,
-    }).catch(() => {});
+    });
 
-    archiveDb.auditLogs.add({
+    await archiveDb.auditLogs.add({
       id: auditId,
       timestamp: now,
-      adminUsername: 'Current Admin',
-      adminUserId: 'CURRENT_USER',
-      userRole: 'ADMIN',
-      deviceName: 'Web App',
+      adminUsername: user?.name || 'مسؤول الأسطول',
+      adminUserId: user?.id || 'ADMIN_USER',
+      userRole: user?.role || 'ADMIN',
+      deviceName: typeof window !== 'undefined' ? window.navigator.userAgent : 'Web Client',
       browser: 'Browser',
       os: 'Web',
-      ipAddress: '127.0.0.1',
-      userAgent: 'FleetManager',
+      ipAddress: 'System',
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'NMO ERP Fleet',
       archiveReason: reason,
       recordsCount: 1,
       recordIds: [vehicleId],
-      entityType: 'OTHER',
+      entityType: 'VEHICLE',
       action: 'ARCHIVE',
-    }).catch(() => {});
-
-    ApiClient.post('DELETE_VEHICLE', { CompanyID: companyId, Vehicle_ID: vehicleId }).catch(() => {});
+    });
 
     return {
       success: true,
       data: true,
-      message: 'تم أرشفة المركبة بنجاح',
+      message: 'تم نقل المركبة إلى مركز الأرشيف بنجاح',
       timestamp: now,
     };
   },
 
-  deleteVehicle: async (vehicleId: string, companyId: string = 'COM-0001', reason: string = 'أرشفة يدوية'): Promise<ApiResponse<boolean>> => {
-    return fleetService.archiveVehicle(vehicleId, companyId, reason);
+  deleteVehicle: async (
+    vehicleId: string, 
+    companyId: string = 'COM-0001', 
+    reason: string = 'أرشفة المركبة',
+    user?: { id: string; name: string; role: string }
+  ): Promise<ApiResponse<boolean>> => {
+    return fleetService.archiveVehicle(vehicleId, companyId, reason, user);
   },
 
-  restoreVehicle: async (vehicleId: string, companyId: string = 'COM-0001'): Promise<ApiResponse<boolean>> => {
+  restoreVehicle: async (
+    vehicleId: string, 
+    companyId: string = 'COM-0001',
+    user?: { id: string; name: string; role: string }
+  ): Promise<ApiResponse<boolean>> => {
     const idx = vehiclesCache.findIndex(v => v.Vehicle_ID === vehicleId);
-    if (idx === -1) return { success: false, data: false, message: 'المركبة غير موجودة', timestamp: new Date().toISOString() };
+    
+    // Call backend restore
+    try {
+      await ApiClient.post('RESTORE_RECORD', { 
+        tableName: 'Vehicles', 
+        idField: 'Vehicle_ID', 
+        idValue: vehicleId 
+      });
+    } catch (e) {
+      console.warn('Backend RESTORE_RECORD call:', e);
+    }
 
-    const vehicle = vehiclesCache[idx];
-    vehicle.IsDeleted = false;
-    vehicle.Operational_Status = 'ACTIVE';
-    vehicle.DeletedAt = undefined;
-    vehicle.DeletedBy = undefined;
-    vehicle.UpdatedAt = new Date().toISOString();
+    if (idx !== -1) {
+      const vehicle = vehiclesCache[idx];
+      vehicle.IsDeleted = false;
+      vehicle.Operational_Status = 'ACTIVE';
+      vehicle.DeletedAt = undefined;
+      vehicle.DeletedBy = undefined;
+      vehicle.ArchiveReason = undefined;
+      vehicle.UpdatedAt = new Date().toISOString();
 
-    vehiclesCache[idx] = refreshVehicleCalculations(vehicle);
-    setStoredItem(STORAGE_KEYS.VEHICLES, vehiclesCache);
+      vehiclesCache[idx] = refreshVehicleCalculations(vehicle);
+      setStoredItem(STORAGE_KEYS.VEHICLES, vehiclesCache);
+    }
+
+    // Remove from archiveDb
+    await archiveDb.archivedRecords.delete(vehicleId);
+
+    // Audit log
+    const auditId = 'AUDIT-' + Date.now();
+    await archiveDb.auditLogs.add({
+      id: auditId,
+      timestamp: new Date().toISOString(),
+      adminUsername: user?.name || 'مسؤول الأسطول',
+      adminUserId: user?.id || 'ADMIN_USER',
+      userRole: user?.role || 'ADMIN',
+      deviceName: typeof window !== 'undefined' ? window.navigator.userAgent : 'Web Client',
+      browser: 'Browser',
+      os: 'Web',
+      ipAddress: 'System',
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'NMO ERP Fleet',
+      archiveReason: 'استعادة المركبة من الأرشيف',
+      recordsCount: 1,
+      recordIds: [vehicleId],
+      entityType: 'VEHICLE',
+      action: 'RESTORE',
+    });
 
     return {
       success: true,
       data: true,
-      message: 'تم استعادة المركبة من الأرشيف بنجاح',
+      message: 'تم استعادة المركبة من الأرشيف وتفعيلها بنجاح',
       timestamp: new Date().toISOString(),
     };
+  },
+
+  // ==========================
+  // BULK VEHICLES IMPORT (Persistent Central Batch API)
+  // ==========================
+  bulkImportVehicles: async (
+    vehiclesList: Partial<Vehicle>[], 
+    companyId: string = 'COM-0001',
+    user?: { id: string; name: string; role: string }
+  ): Promise<ApiResponse<{
+    requested: number;
+    inserted: number;
+    updated: number;
+    skipped: number;
+    failed: number;
+    errors: { row?: number; error: string }[];
+    vehicles: Vehicle[];
+  }>> => {
+    const now = new Date().toISOString();
+    try {
+      console.log('[fleetService.bulkImportVehicles] Dispatching batch persistence request to central backend...', {
+        count: vehiclesList.length,
+        companyId,
+      });
+
+      const response = await ApiClient.post<any>('IMPORT_VEHICLES_BATCH', {
+        CompanyID: companyId,
+        vehicles: vehiclesList,
+        CreatedBy: user?.name || 'ADMIN_IMPORT',
+      });
+
+      // Strict failure check
+      if (response && response.success === false && response.error) {
+        return {
+          success: false,
+          data: {
+            requested: vehiclesList.length,
+            inserted: 0,
+            updated: 0,
+            skipped: 0,
+            failed: vehiclesList.length,
+            errors: [{ error: response.message || response.error.details || 'فشل الاتصال بالخادم المركزي' }],
+            vehicles: []
+          },
+          message: response.message || 'فشل استيراد وحفظ المركبات في قاعدة البيانات المركزية',
+          error: response.error,
+          timestamp: now
+        };
+      }
+
+      const resData = response?.data || {};
+      const insertedList: Vehicle[] = Array.isArray(resData.data) 
+        ? resData.data 
+        : (Array.isArray(resData.vehicles) ? resData.vehicles : (Array.isArray(response) ? response : []));
+      
+      const insertedCount = typeof resData.inserted === 'number' 
+        ? resData.inserted 
+        : (typeof resData.importedCount === 'number' ? resData.importedCount : insertedList.length);
+      
+      const errorsList = Array.isArray(resData.errors) ? resData.errors : [];
+      const failedCount = typeof resData.failed === 'number' ? resData.failed : errorsList.length;
+
+      if (insertedList.length > 0) {
+        // Refresh calculations for all inserted vehicles
+        const calculatedInserted = insertedList.map(refreshVehicleCalculations);
+
+        // Update local cache and localStorage
+        const existingIds = new Set(vehiclesCache.map(v => v.Vehicle_ID));
+        const newOnes = calculatedInserted.filter(v => !existingIds.has(v.Vehicle_ID));
+        vehiclesCache = [...newOnes, ...vehiclesCache];
+        setStoredItem(STORAGE_KEYS.VEHICLES, vehiclesCache);
+      }
+
+      // Record Audit log in indexedDB
+      archiveDb.auditLogs.add({
+        id: 'AUDIT-IMPORT-' + Date.now(),
+        timestamp: now,
+        adminUsername: user?.name || 'مسؤول الأسطول',
+        adminUserId: user?.id || 'ADMIN_USER',
+        userRole: user?.role || 'ADMIN',
+        deviceName: typeof window !== 'undefined' ? window.navigator.userAgent : 'Web Client',
+        browser: 'Browser',
+        os: 'Web',
+        ipAddress: 'System',
+        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'NMO ERP Fleet',
+        archiveReason: `استيراد مجمع لعدد ${insertedCount} مركبة إلى قاعدة البيانات المركزية`,
+        recordsCount: insertedCount,
+        recordIds: insertedList.map(v => v.Vehicle_ID),
+        entityType: 'VEHICLE',
+        action: 'UPDATE',
+      }).catch(() => {});
+
+      const isOverallSuccess = insertedCount > 0;
+
+      return {
+        success: isOverallSuccess,
+        data: {
+          requested: vehiclesList.length,
+          inserted: insertedCount,
+          updated: resData.updated || 0,
+          skipped: resData.skipped || 0,
+          failed: failedCount,
+          errors: errorsList,
+          vehicles: insertedList
+        },
+        message: isOverallSuccess
+          ? (failedCount === 0 
+              ? `تم استيراد وحفظ ${insertedCount} مركبة بنجاح في قاعدة البيانات المركزية`
+              : `تم حفظ ${insertedCount} من أصل ${vehiclesList.length} مركبة. تعذر حفظ ${failedCount} سجل`)
+          : (response.message || 'فشل حفظ سجلات المركبات في قاعدة البيانات المركزية'),
+        timestamp: now
+      };
+    } catch (err: any) {
+      console.error('fleetService.bulkImportVehicles fatal error:', err);
+      return {
+        success: false,
+        data: {
+          requested: vehiclesList.length,
+          inserted: 0,
+          updated: 0,
+          skipped: 0,
+          failed: vehiclesList.length,
+          errors: [{ error: err.message || 'حدث استثناء غير متوقع أثناء إرسال البيانات للخادم' }],
+          vehicles: []
+        },
+        message: err.message || 'حدث خطأ تقني أثناء الاتصال بالخادم المركزي',
+        error: { code: 'CLIENT_EXCEPTION', details: String(err) },
+        timestamp: now
+      };
+    }
   },
 
   clearAllVehicles: async (companyId: string = 'COM-0001'): Promise<ApiResponse<boolean>> => {

@@ -38,8 +38,11 @@ export default function FleetPage() {
   const [quickFuelVehicleId, setQuickFuelVehicleId] = useState<string | null>(null);
   const [quickMaintVehicleId, setQuickMaintVehicleId] = useState<string | null>(null);
 
-  // Delete Confirmation
+  // Delete/Archive Confirmation
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
+  const [archiveReason, setArchiveReason] = useState('بيع المركبة أو خروجها من الخدمة');
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState('');
 
   useEffect(() => {
     loadVehicles();
@@ -113,12 +116,25 @@ export default function FleetPage() {
 
   const handleDeleteVehicle = async () => {
     if (!vehicleToDelete) return;
+    if (!archiveReason.trim()) {
+      setArchiveError('يرجى تحديد أو كتابة سبب الأرشفة');
+      return;
+    }
+    setIsArchiving(true);
+    setArchiveError('');
     try {
-      await fleetService.deleteVehicle(vehicleToDelete.Vehicle_ID, 'COM-0001');
-      setVehicleToDelete(null);
-      loadVehicles();
-    } catch (err) {
-      console.error(err);
+      const res = await fleetService.archiveVehicle(vehicleToDelete.Vehicle_ID, archiveReason.trim(), 'COM-0001');
+      if (res && res.success) {
+        setVehicleToDelete(null);
+        setArchiveReason('بيع المركبة أو خروجها من الخدمة');
+        await loadVehicles();
+      } else {
+        setArchiveError(res?.message || 'تعذر أرشفة المركبة في الخادم');
+      }
+    } catch (err: any) {
+      setArchiveError(err.message || 'حدث خطأ أثناء أرشفة المركبة');
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -407,7 +423,7 @@ export default function FleetPage() {
           </button>
         </div>
       ) : viewMode === 'GRID' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           {filteredVehicles.map((vehicle, index) => (
             <VehicleCard
               key={`${vehicle.Vehicle_ID}-${index}`}
@@ -498,10 +514,10 @@ export default function FleetPage() {
         />
       )}
 
-      {/* Archive / Delete Confirmation Dialog */}
+      {/* Archive Confirmation Dialog */}
       {vehicleToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs" dir="rtl">
-          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 animate-scaleIn">
             <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -509,22 +525,70 @@ export default function FleetPage() {
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
                 تأكيد أرشفة المركبة
               </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                هل أنت متأكد من رغبتك في أرشفة المركبة <strong>({vehicleToDelete.Plate_Number} - {vehicleToDelete.Brand} {vehicleToDelete.Model})</strong>؟ سيتم نقلها للأرشيف مع الحفاظ على كافة سجلات الوقود والصيانة.
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                هل أنت متأكد من رغبتك في أرشفة المركبة <strong>({vehicleToDelete.Plate_Number} - {vehicleToDelete.Brand} {vehicleToDelete.Model})</strong>؟ سيتم نقلها لمركز الأرشيف العام مع إمكانية استعادتها لاحقاً والحفاظ على كافة سجلات الوقود والصيانة وتوثيق سبب الأرشفة في سجل التدقيق.
               </p>
             </div>
+
+            {archiveError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold">
+                {archiveError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                سبب الأرشفة (إلزامي للتوثيق والتدقيق) *
+              </label>
+              <select
+                value={archiveReason}
+                onChange={(e) => setArchiveReason(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-rose-500 mb-2"
+              >
+                <option value="بيع المركبة أو خروجها من الخدمة">بيع المركبة أو خروجها من الخدمة</option>
+                <option value="تالف / حادث غير قابل للإصلاح">تالف / حادث غير قابل للإصلاح</option>
+                <option value="انتهاء عقد الإيجار / التشغيل">انتهاء عقد الإيجار / التشغيل</option>
+                <option value="استبدال بمركبة أحدث">استبدال بمركبة أحدث</option>
+                <option value="خطأ في الإدخال أو سجل مكرر">خطأ في الإدخال أو سجل مكرر</option>
+                <option value="سبب آخر">سبب آخر (تحديد يدوي)...</option>
+              </select>
+
+              {archiveReason === 'سبب آخر' && (
+                <input
+                  type="text"
+                  placeholder="اكتب سبب الأرشفة بالتفصيل..."
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-rose-300 dark:border-rose-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
+                />
+              )}
+            </div>
+
             <div className="flex items-center justify-center gap-2.5 pt-2">
               <button
-                onClick={() => setVehicleToDelete(null)}
-                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-50"
+                type="button"
+                onClick={() => {
+                  setVehicleToDelete(null);
+                  setArchiveError('');
+                }}
+                disabled={isArchiving}
+                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 disabled:opacity-50"
               >
                 إلغاء
               </button>
               <button
+                type="button"
                 onClick={handleDeleteVehicle}
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-600/20"
+                disabled={isArchiving}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md shadow-rose-600/20 disabled:opacity-50 flex items-center gap-2"
               >
-                تأكيد الأرشفة
+                {isArchiving ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-r-transparent rounded-full animate-spin" />
+                    جاري الأرشفة والتوثيق...
+                  </>
+                ) : (
+                  'تأكيد الأرشفة والترحيل'
+                )}
               </button>
             </div>
           </div>

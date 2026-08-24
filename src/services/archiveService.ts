@@ -67,6 +67,13 @@ export const archiveService = {
       await productService.deleteProduct(recordId, companyId);
     } else if (entityType === 'EMPLOYEE') {
       await employeeService.deleteEmployee(recordId, companyId);
+    } else if (entityType === 'VEHICLE') {
+      await ApiClient.post('DELETE_VEHICLE', { 
+        Vehicle_ID: recordId, 
+        CompanyID: companyId,
+        DeletedBy: adminUser.name,
+        ArchiveReason: reason
+      });
     }
     
     return { success: true };
@@ -118,6 +125,9 @@ export const archiveService = {
     } else if (archivedRecord.entityType === 'EMPLOYEE') {
       tableName = 'Employees';
       idField = 'EmployeeID';
+    } else if (archivedRecord.entityType === 'VEHICLE') {
+      tableName = 'Vehicles';
+      idField = 'Vehicle_ID';
     }
 
     if (tableName) {

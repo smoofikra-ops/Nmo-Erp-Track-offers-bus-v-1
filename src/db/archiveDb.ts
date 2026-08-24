@@ -20,7 +20,7 @@ export interface AuditLogEntry {
 
 export interface ArchivedRecord {
   id: string;
-  entityType: 'COMMISSION_RECORD' | 'QUOTE' | 'PRODUCT' | 'EMPLOYEE' | 'OTHER';
+  entityType: 'COMMISSION_RECORD' | 'QUOTE' | 'PRODUCT' | 'EMPLOYEE' | 'VEHICLE' | 'OTHER';
   recordData: any;
   archivedAt: string; // ISO String
   archiveReason: string;

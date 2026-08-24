@@ -116,11 +116,26 @@ const SCHEMA = {
     "TotalPaidInvoices", "FinalBalance", "Status", "ClosedAt", "ClosedBy", "CreatedAt", "UpdatedAt"
   ],
   Vehicles: [
-    "Vehicle_ID", "CompanyID", "Plate_Number", "Plate_Letters", "Plate_Numbers", "Make", "Brand", "Model", 
-    "Year", "Color", "Vehicle_Type", "Fuel_Type", "Tank_Capacity", "Current_Odometer", "Primary_Driver_ID", 
-    "Primary_Driver_Name", "Secondary_Driver_ID", "Secondary_Driver_Name", "Operational_Status", "Ownership_Type", 
-    "Branch", "Location", "Chassis_Number", "VIN", "Engine_Number", "Notes", "Readiness_Score", "Readiness_Reasons", 
-    "Insurance_Expiry", "Inspection_Expiry", "Registration_Expiry", "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted", "DeletedAt", "DeletedBy"
+    "Vehicle_ID", "CompanyID", "Employee_ID", "Plate_Number", "Plate_Letters", "Plate_Numbers", "Make", "Brand", "Model", 
+    "Year", "Manufacturing_Year", "Color", "Vehicle_Type", "Fuel_Type", "Tank_Capacity", "Current_Odometer", "Initial_Odometer",
+    "Primary_Driver_ID", "Primary_Driver_Name", "Secondary_Driver_ID", "Secondary_Driver_Name",
+    "Assigned_Employee_ID", "Assigned_User_Name", "Owner_Name", "Owner_ID_Number", "User_ID_Number",
+    "Serial_Number", "Registration_Number", "Registration_Type", "Load_Capacity", "Vehicle_Weight",
+    "Operational_Status", "Ownership_Type", "Branch", "Location", "Chassis_Number", "VIN", "VIN_Chassis_Number", 
+    "Engine_Number", "Notes", "Image_URL", "Readiness_Score", "Readiness_Index", "Readiness_Reasons", 
+    "Insurance_Expiry", "Inspection_Expiry", "Periodic_Inspection_Expiry", "Registration_Expiry", "License_Expiry",
+    "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted", "DeletedAt", "DeletedBy", "ArchiveReason"
+  ],
+  Vehicle_Master: [
+    "Vehicle_ID", "CompanyID", "Employee_ID", "Plate_Number", "Plate_Letters", "Plate_Numbers", "Make", "Brand", "Model", 
+    "Year", "Manufacturing_Year", "Color", "Vehicle_Type", "Fuel_Type", "Tank_Capacity", "Current_Odometer", "Initial_Odometer",
+    "Primary_Driver_ID", "Primary_Driver_Name", "Secondary_Driver_ID", "Secondary_Driver_Name",
+    "Assigned_Employee_ID", "Assigned_User_Name", "Owner_Name", "Owner_ID_Number", "User_ID_Number",
+    "Serial_Number", "Registration_Number", "Registration_Type", "Load_Capacity", "Vehicle_Weight",
+    "Operational_Status", "Ownership_Type", "Branch", "Location", "Chassis_Number", "VIN", "VIN_Chassis_Number", 
+    "Engine_Number", "Notes", "Image_URL", "Readiness_Score", "Readiness_Index", "Readiness_Reasons", 
+    "Insurance_Expiry", "Inspection_Expiry", "Periodic_Inspection_Expiry", "Registration_Expiry", "License_Expiry",
+    "CreatedAt", "UpdatedAt", "CreatedBy", "UpdatedBy", "IsDeleted", "DeletedAt", "DeletedBy", "ArchiveReason"
   ],
   Fleet_Fuel_Logs: [
     "Log_ID", "CompanyID", "Vehicle_ID", "Driver_ID", "Driver_Name", "Date", "Odometer", "Previous_Odometer", 
@@ -182,9 +197,20 @@ function responseError(message, code = "ERROR", details = "") {
 }
 
 // --- CORE DB FUNCTIONS ---
+function resolveSheet(ss, tableName) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(tableName);
+  if (!sheet) {
+    if (tableName === 'Vehicles' || tableName === 'Vehicle_Master' || tableName === 'VehicleMaster') {
+      sheet = ss.getSheetByName('Vehicle_Master') || ss.getSheetByName('Vehicles') || ss.getSheetByName('VehicleMaster');
+    }
+  }
+  return sheet;
+}
+
 function getTableData(tableName, filters = {}) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(tableName);
+  const sheet = resolveSheet(ss, tableName);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
@@ -198,6 +224,26 @@ function getTableData(tableName, filters = {}) {
       const cleanHeader = String(header).trim();
       obj[cleanHeader] = row[index];
     });
+
+    // Normalize field aliases for vehicles
+    if (tableName === 'Vehicles' || tableName === 'Vehicle_Master' || tableName === 'VehicleMaster') {
+      if (obj.VIN_Chassis_Number && !obj.VIN) obj.VIN = obj.VIN_Chassis_Number;
+      if (obj.VIN && !obj.VIN_Chassis_Number) obj.VIN_Chassis_Number = obj.VIN;
+      if (obj.Manufacturing_Year && !obj.Year) obj.Year = obj.Manufacturing_Year;
+      if (obj.Year && !obj.Manufacturing_Year) obj.Manufacturing_Year = obj.Year;
+      if (obj.Employee_ID && !obj.Assigned_Employee_ID) obj.Assigned_Employee_ID = obj.Employee_ID;
+      if (obj.Assigned_Employee_ID && !obj.Employee_ID) obj.Employee_ID = obj.Assigned_Employee_ID;
+      if (obj.Primary_Driver_ID && !obj.Assigned_Employee_ID) obj.Assigned_Employee_ID = obj.Primary_Driver_ID;
+      if (obj.Assigned_Employee_ID && !obj.Primary_Driver_ID) obj.Primary_Driver_ID = obj.Assigned_Employee_ID;
+      if (obj.Primary_Driver_Name && !obj.Assigned_User_Name) obj.Assigned_User_Name = obj.Primary_Driver_Name;
+      if (obj.Assigned_User_Name && !obj.Primary_Driver_Name) obj.Primary_Driver_Name = obj.Assigned_User_Name;
+      if (obj.Periodic_Inspection_Expiry && !obj.Inspection_Expiry) obj.Inspection_Expiry = obj.Periodic_Inspection_Expiry;
+      if (obj.Inspection_Expiry && !obj.Periodic_Inspection_Expiry) obj.Periodic_Inspection_Expiry = obj.Inspection_Expiry;
+      if (obj.Registration_Expiry && !obj.License_Expiry) obj.License_Expiry = obj.Registration_Expiry;
+      if (obj.License_Expiry && !obj.Registration_Expiry) obj.Registration_Expiry = obj.License_Expiry;
+      if (obj.Readiness_Index !== undefined && obj.Readiness_Score === undefined) obj.Readiness_Score = obj.Readiness_Index;
+      if (obj.Readiness_Score !== undefined && obj.Readiness_Index === undefined) obj.Readiness_Index = obj.Readiness_Score;
+    }
     return obj;
   });
 
@@ -214,12 +260,33 @@ function getTableData(tableName, filters = {}) {
 
 function insertRow(tableName, obj) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(tableName);
+  const sheet = resolveSheet(ss, tableName);
   if (!sheet) throw new Error("Table not found: " + tableName);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   
   const rowData = headers.map(header => {
-    return obj[header] !== undefined ? obj[header] : "";
+    const cleanHeader = String(header).trim();
+    if (obj[cleanHeader] !== undefined) return obj[cleanHeader];
+    // Check aliases
+    if (cleanHeader === 'Employee_ID') return obj.Employee_ID || obj.Assigned_Employee_ID || obj.Primary_Driver_ID || '';
+    if (cleanHeader === 'Assigned_Employee_ID') return obj.Assigned_Employee_ID || obj.Employee_ID || obj.Primary_Driver_ID || '';
+    if (cleanHeader === 'Primary_Driver_ID') return obj.Primary_Driver_ID || obj.Assigned_Employee_ID || obj.Employee_ID || '';
+    if (cleanHeader === 'Assigned_User_Name') return obj.Assigned_User_Name || obj.Primary_Driver_Name || '';
+    if (cleanHeader === 'Primary_Driver_Name') return obj.Primary_Driver_Name || obj.Assigned_User_Name || '';
+    if (cleanHeader === 'VIN') return obj.VIN || obj.VIN_Chassis_Number || obj.Chassis_Number || '';
+    if (cleanHeader === 'VIN_Chassis_Number') return obj.VIN_Chassis_Number || obj.VIN || obj.Chassis_Number || '';
+    if (cleanHeader === 'Chassis_Number') return obj.Chassis_Number || obj.VIN_Chassis_Number || obj.VIN || '';
+    if (cleanHeader === 'Year') return obj.Year || obj.Manufacturing_Year || '';
+    if (cleanHeader === 'Manufacturing_Year') return obj.Manufacturing_Year || obj.Year || '';
+    if (cleanHeader === 'Periodic_Inspection_Expiry') return obj.Periodic_Inspection_Expiry || obj.Inspection_Expiry || '';
+    if (cleanHeader === 'Inspection_Expiry') return obj.Inspection_Expiry || obj.Periodic_Inspection_Expiry || '';
+    if (cleanHeader === 'Registration_Expiry') return obj.Registration_Expiry || obj.License_Expiry || '';
+    if (cleanHeader === 'License_Expiry') return obj.License_Expiry || obj.Registration_Expiry || '';
+    if (cleanHeader === 'Readiness_Score') return obj.Readiness_Score !== undefined ? obj.Readiness_Score : (obj.Readiness_Index !== undefined ? obj.Readiness_Index : 100);
+    if (cleanHeader === 'Readiness_Index') return obj.Readiness_Index !== undefined ? obj.Readiness_Index : (obj.Readiness_Score !== undefined ? obj.Readiness_Score : 100);
+    if (cleanHeader === 'Brand') return obj.Brand || obj.Make || '';
+    if (cleanHeader === 'Make') return obj.Make || obj.Brand || '';
+    return "";
   });
   
   sheet.appendRow(rowData);
@@ -228,7 +295,7 @@ function insertRow(tableName, obj) {
 
 function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(tableName);
+  const sheet = resolveSheet(ss, tableName);
   if (!sheet) throw new Error("Table not found: " + tableName);
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) throw new Error("Record not found");
@@ -255,16 +322,26 @@ function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
     if (colIndex !== -1) {
       sheet.getRange(rowIndex, colIndex + 1).setValue(updateObj[key]);
       updatedFields++;
-    } else {
-      // Don't silently ignore non-matching columns
-      // But some legacy code might pass fields not in the sheet. 
-      // To follow strict instructions:
-      // throw new Error("Column not found: " + key);
     }
   }
   
   if (updatedFields === 0) {
-    throw new Error('No company fields were updated');
+    // If no fields matched exact header names, try checking aliases
+    for (let key in updateObj) {
+      let aliasKey = key;
+      if (key === 'VIN') aliasKey = 'VIN_Chassis_Number';
+      else if (key === 'VIN_Chassis_Number') aliasKey = 'VIN';
+      else if (key === 'Year') aliasKey = 'Manufacturing_Year';
+      else if (key === 'Manufacturing_Year') aliasKey = 'Year';
+      else if (key === 'Assigned_Employee_ID') aliasKey = 'Employee_ID';
+      else if (key === 'Employee_ID') aliasKey = 'Assigned_Employee_ID';
+
+      let aliasColIndex = headers.indexOf(String(aliasKey).trim());
+      if (aliasColIndex !== -1) {
+        sheet.getRange(rowIndex, aliasColIndex + 1).setValue(updateObj[key]);
+        updatedFields++;
+      }
+    }
   }
   
   SpreadsheetApp.flush();
@@ -428,6 +505,8 @@ function doPost(e) {
       case 'GET_DOCUMENTS': return responseOk(handleGetFleetDocuments(payload));
       case 'ADD_DOCUMENT': return responseOk(handleAddFleetDocument(payload));
       case 'IMPORT_VEHICLES_BATCH': return responseOk(handleImportVehiclesBatch(payload));
+      case 'BULK_IMPORT_VEHICLES': return responseOk(handleImportVehiclesBatch(payload));
+      case 'bulkImportVehicles': return responseOk(handleImportVehiclesBatch(payload));
 
 
       default:
@@ -1837,6 +1916,9 @@ function handleCreateVehicle(payload) {
   const vehicleId = payload.Vehicle_ID || ("VEH-" + generateUUID().substring(0, 8).toUpperCase());
   const now = getTimestamp();
 
+  const yr = Number(payload.Manufacturing_Year || payload.Year) || new Date().getFullYear();
+  const vin = payload.VIN_Chassis_Number || payload.VIN || payload.Chassis_Number || "";
+
   const vehicleObj = {
     Vehicle_ID: vehicleId,
     CompanyID: companyId,
@@ -1846,60 +1928,112 @@ function handleCreateVehicle(payload) {
     Make: payload.Make || payload.Brand || "",
     Brand: payload.Brand || payload.Make || "",
     Model: payload.Model || "",
-    Year: payload.Year || new Date().getFullYear(),
-    Color: payload.Color || "",
+    Year: yr,
+    Manufacturing_Year: yr,
+    Color: payload.Color || "أبيض",
     Vehicle_Type: payload.Vehicle_Type || "SEDAN",
     Fuel_Type: payload.Fuel_Type || "GASOLINE_91",
-    Tank_Capacity: payload.Tank_Capacity || 50,
-    Current_Odometer: payload.Current_Odometer || 0,
-    Primary_Driver_ID: payload.Primary_Driver_ID || "",
-    Primary_Driver_Name: payload.Primary_Driver_Name || "",
+    Tank_Capacity: Number(payload.Tank_Capacity) || 50,
+    Current_Odometer: Number(payload.Current_Odometer) || 0,
+    Initial_Odometer: Number(payload.Initial_Odometer || payload.Current_Odometer) || 0,
+
+    // Ownership & Driver Info
+    Primary_Driver_ID: payload.Primary_Driver_ID || payload.Assigned_Employee_ID || "",
+    Primary_Driver_Name: payload.Primary_Driver_Name || payload.Assigned_User_Name || "",
     Secondary_Driver_ID: payload.Secondary_Driver_ID || "",
     Secondary_Driver_Name: payload.Secondary_Driver_Name || "",
+    Assigned_Employee_ID: payload.Assigned_Employee_ID || payload.Primary_Driver_ID || "",
+    Assigned_User_Name: payload.Assigned_User_Name || payload.Primary_Driver_Name || "",
+    Owner_Name: payload.Owner_Name || "",
+    Owner_ID_Number: payload.Owner_ID_Number || "",
+    User_ID_Number: payload.User_ID_Number || "",
+
+    // Identification & Specs
+    Serial_Number: payload.Serial_Number || payload.Registration_Number || "",
+    Registration_Number: payload.Registration_Number || payload.Serial_Number || "",
+    Registration_Type: payload.Registration_Type || "خصوصي",
+    Load_Capacity: Number(payload.Load_Capacity) || 0,
+    Vehicle_Weight: Number(payload.Vehicle_Weight) || 0,
+
+    // Operational Status
     Operational_Status: payload.Operational_Status || "ACTIVE",
     Ownership_Type: payload.Ownership_Type || "OWNED",
     Branch: payload.Branch || "",
     Location: payload.Location || "",
-    Chassis_Number: payload.Chassis_Number || payload.VIN || "",
-    VIN: payload.VIN || payload.Chassis_Number || "",
+    Chassis_Number: vin,
+    VIN: vin,
+    VIN_Chassis_Number: vin,
     Engine_Number: payload.Engine_Number || "",
     Notes: payload.Notes || "",
+    Image_URL: payload.Image_URL || "",
     Readiness_Score: payload.Readiness_Score !== undefined ? payload.Readiness_Score : 100,
     Readiness_Reasons: Array.isArray(payload.Readiness_Reasons) ? payload.Readiness_Reasons.join(",") : (payload.Readiness_Reasons || ""),
+    
+    // Expiries
     Insurance_Expiry: payload.Insurance_Expiry || "",
-    Inspection_Expiry: payload.Inspection_Expiry || "",
-    Registration_Expiry: payload.Registration_Expiry || "",
+    Inspection_Expiry: payload.Periodic_Inspection_Expiry || payload.Inspection_Expiry || "",
+    Periodic_Inspection_Expiry: payload.Periodic_Inspection_Expiry || payload.Inspection_Expiry || "",
+    Registration_Expiry: payload.Registration_Expiry || payload.License_Expiry || "",
+    License_Expiry: payload.Registration_Expiry || payload.License_Expiry || "",
+
     CreatedAt: now,
     UpdatedAt: now,
     CreatedBy: payload.CreatedBy || "SYSTEM",
     UpdatedBy: payload.CreatedBy || "SYSTEM",
     IsDeleted: false,
     DeletedAt: "",
-    DeletedBy: ""
+    DeletedBy: "",
+    ArchiveReason: ""
   };
 
   insertRow("Vehicles", vehicleObj);
+  logAudit(companyId, payload.CreatedBy || 'USER', 'FLEET', 'CREATE', 'Vehicles', vehicleId, null, vehicleObj);
   return vehicleObj;
 }
 
 function handleUpdateVehicle(payload) {
   const vehicleId = payload.Vehicle_ID || payload.vehicleId;
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
   payload.UpdatedAt = getTimestamp();
+  
   if (Array.isArray(payload.Readiness_Reasons)) {
     payload.Readiness_Reasons = payload.Readiness_Reasons.join(",");
   }
+  
+  // Normalize duplicates
+  if (payload.VIN_Chassis_Number && !payload.VIN) payload.VIN = payload.VIN_Chassis_Number;
+  if (payload.VIN && !payload.VIN_Chassis_Number) payload.VIN_Chassis_Number = payload.VIN;
+  if (payload.Manufacturing_Year && !payload.Year) payload.Year = payload.Manufacturing_Year;
+  if (payload.Periodic_Inspection_Expiry && !payload.Inspection_Expiry) payload.Inspection_Expiry = payload.Periodic_Inspection_Expiry;
+  if (payload.Registration_Expiry && !payload.License_Expiry) payload.License_Expiry = payload.Registration_Expiry;
+
   updateRow("Vehicles", "Vehicle_ID", vehicleId, payload);
+  logAudit(companyId, payload.UpdatedBy || 'USER', 'FLEET', 'UPDATE', 'Vehicles', vehicleId, null, payload);
   return payload;
 }
 
 function handleDeleteVehicle(payload) {
   const vehicleId = payload.Vehicle_ID || payload.vehicleId;
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
   const now = getTimestamp();
+  const deletedBy = payload.DeletedBy || "USER";
+  const archiveReason = payload.ArchiveReason || payload.reason || "أرشفة المركبة من قبل المسؤول";
+
   updateRow("Vehicles", "Vehicle_ID", vehicleId, {
     IsDeleted: true,
     DeletedAt: now,
-    DeletedBy: payload.DeletedBy || "USER"
+    DeletedBy: deletedBy,
+    ArchiveReason: archiveReason,
+    Operational_Status: 'STOPPED'
   });
+  
+  logAudit(companyId, deletedBy, 'FLEET', 'ARCHIVE', 'Vehicles', vehicleId, null, {
+    action: 'ARCHIVE',
+    reason: archiveReason,
+    deletedAt: now,
+    deletedBy: deletedBy
+  });
+
   return { success: true, vehicleId };
 }
 
@@ -2049,14 +2183,245 @@ function handleAddFleetDocument(payload) {
 }
 
 function handleImportVehiclesBatch(payload) {
-  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
-  const vehiclesList = payload.vehicles || [];
-  const results = [];
-  for (let i = 0; i < vehiclesList.length; i++) {
-    const v = vehiclesList[i];
-    v.CompanyID = companyId;
-    results.push(handleCreateVehicle(v));
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000); // 30s lock for bulk import safety
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = resolveSheet(ss, 'Vehicles') || resolveSheet(ss, 'Vehicle_Master');
+    if (!sheet) {
+      // Auto create if not exists
+      sheet = ss.insertSheet('Vehicles');
+      const headers = SCHEMA.Vehicles;
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+
+    const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+    const vehiclesList = payload.vehicles || payload.data || [];
+    const createdBy = payload.CreatedBy || payload.createdBy || 'SYSTEM_IMPORT';
+    const now = getTimestamp();
+
+    if (!Array.isArray(vehiclesList) || vehiclesList.length === 0) {
+      return {
+        success: false,
+        requested: 0,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        failed: 0,
+        errors: [{ error: 'قائمة المركبات فارغة أو غير صالحة' }],
+        data: []
+      };
+    }
+
+    // 1. Fetch existing vehicles and employees for duplicate check and employee linking
+    const existingVehicles = getTableData('Vehicles', { CompanyID: companyId, includeDeleted: true });
+    const employees = getTableData('Employees', { CompanyID: companyId, includeDeleted: false });
+
+    const existingPlates = new Set(existingVehicles.map(v => String(v.Plate_Number || '').trim().toUpperCase()).filter(Boolean));
+    const existingVins = new Set(existingVehicles.map(v => String(v.VIN_Chassis_Number || v.VIN || v.Chassis_Number || '').trim().toUpperCase()).filter(Boolean));
+
+    const insertedRecords = [];
+    const errors = [];
+    const seenPlatesInBatch = new Set();
+    const seenVinsInBatch = new Set();
+
+    for (let i = 0; i < vehiclesList.length; i++) {
+      const row = vehiclesList[i];
+      const rowNumber = i + 1;
+
+      // Critical backend validation
+      const plate = String(row.Plate_Number || '').trim();
+      const brand = String(row.Brand || row.Make || '').trim();
+      const model = String(row.Model || '').trim();
+      const vin = String(row.VIN_Chassis_Number || row.VIN || row.Chassis_Number || '').trim();
+      const year = Number(row.Manufacturing_Year || row.Year) || new Date().getFullYear();
+
+      if (!plate) {
+        errors.push({ row: rowNumber, error: 'رقم اللوحة مفقود' });
+        continue;
+      }
+      if (!brand || !model) {
+        errors.push({ row: rowNumber, error: `الماركة أو الطراز مفقود للمركبة (${plate})` });
+        continue;
+      }
+
+      const normPlate = plate.toUpperCase();
+      if (existingPlates.has(normPlate) || seenPlatesInBatch.has(normPlate)) {
+        errors.push({ row: rowNumber, error: `رقم اللوحة "${plate}" مكرر ومسجل مسبقاً` });
+        continue;
+      }
+      seenPlatesInBatch.add(normPlate);
+
+      if (vin) {
+        const normVin = vin.toUpperCase();
+        if (existingVins.has(normVin) || seenVinsInBatch.has(normVin)) {
+          errors.push({ row: rowNumber, error: `رقم الهيكل VIN "${vin}" مكرر ومسجل مسبقاً` });
+          continue;
+        }
+        seenVinsInBatch.add(normVin);
+      }
+
+      // Resolve and link Employee_ID against Employees database
+      let resolvedEmpId = row.Employee_ID || row.Assigned_Employee_ID || row.Primary_Driver_ID || '';
+      let resolvedEmpName = row.Assigned_User_Name || row.Primary_Driver_Name || '';
+      let resolvedUserId = row.User_ID_Number || '';
+
+      if (resolvedEmpId) {
+        const cleanEmpId = String(resolvedEmpId).trim().toUpperCase();
+        const matchedEmp = employees.find(e => 
+          (e.EmployeeID && String(e.EmployeeID).trim().toUpperCase() === cleanEmpId) ||
+          (e.EmployeeCode && String(e.EmployeeCode).trim().toUpperCase() === cleanEmpId) ||
+          (e.NationalID && String(e.NationalID).trim() === cleanEmpId)
+        );
+
+        if (matchedEmp) {
+          resolvedEmpId = matchedEmp.EmployeeID || matchedEmp.EmployeeCode;
+          resolvedEmpName = matchedEmp.ArabicName || matchedEmp.EnglishName || resolvedEmpName;
+          resolvedUserId = matchedEmp.NationalID || resolvedUserId;
+        }
+      }
+
+      const vehicleId = row.Vehicle_ID || ("VEH-" + generateUUID().substring(0, 8).toUpperCase());
+
+      // Safe Date Normalization Helper
+      function normalizeDateSafe(val) {
+        if (!val) return '';
+        if (val instanceof Date) {
+          if (isNaN(val.getTime())) return '';
+          return Utilities.formatDate(val, Session.getScriptTimeZone() || "GMT+3", "yyyy-MM-dd");
+        }
+        if (typeof val === 'number') {
+          // Excel serial date to JS Date
+          var excelEpoch = new Date(Date.UTC(1899, 11, 30));
+          var jsDate = new Date(excelEpoch.getTime() + val * 86400000);
+          if (!isNaN(jsDate.getTime())) {
+            return Utilities.formatDate(jsDate, Session.getScriptTimeZone() || "GMT+3", "yyyy-MM-dd");
+          }
+          return '';
+        }
+        var str = String(val).trim();
+        if (!str || str === '-' || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') return '';
+        
+        // Handle DD/MM/YYYY or DD-MM-YYYY
+        var dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (dmyMatch) {
+          var day = parseInt(dmyMatch[1], 10);
+          var month = parseInt(dmyMatch[2], 10) - 1;
+          var year = parseInt(dmyMatch[3], 10);
+          var dmyDate = new Date(year, month, day);
+          if (!isNaN(dmyDate.getTime())) {
+            return Utilities.formatDate(dmyDate, Session.getScriptTimeZone() || "GMT+3", "yyyy-MM-dd");
+          }
+        }
+        
+        var parsed = new Date(str);
+        if (!isNaN(parsed.getTime())) {
+          return Utilities.formatDate(parsed, Session.getScriptTimeZone() || "GMT+3", "yyyy-MM-dd");
+        }
+        return str;
+      }
+
+      const regExp = normalizeDateSafe(row.Registration_Expiry || row.License_Expiry);
+      const insExp = normalizeDateSafe(row.Insurance_Expiry);
+      const inspExp = normalizeDateSafe(row.Periodic_Inspection_Expiry || row.Inspection_Expiry);
+
+      const vehicleObj = {
+        Vehicle_ID: vehicleId,
+        CompanyID: companyId,
+        Employee_ID: resolvedEmpId,
+        Assigned_Employee_ID: resolvedEmpId,
+        Primary_Driver_ID: resolvedEmpId,
+        Assigned_User_Name: resolvedEmpName,
+        Primary_Driver_Name: resolvedEmpName,
+        Secondary_Driver_ID: row.Secondary_Driver_ID || '',
+        Secondary_Driver_Name: row.Secondary_Driver_Name || '',
+        Owner_Name: row.Owner_Name || 'شركة المقاولات الحديثة',
+        Owner_ID_Number: row.Owner_ID_Number || '',
+        User_ID_Number: resolvedUserId,
+
+        VIN_Chassis_Number: vin,
+        VIN: vin,
+        Chassis_Number: vin,
+        Plate_Number: plate,
+        Plate_Letters: row.Plate_Letters || '',
+        Plate_Numbers: row.Plate_Numbers || '',
+        Brand: brand,
+        Make: brand,
+        Model: model,
+        Manufacturing_Year: year,
+        Year: year,
+        Color: row.Color || 'أبيض',
+        Registration_Type: row.Registration_Type || 'خصوصي',
+        Load_Capacity: Number(row.Load_Capacity) || 0,
+        Vehicle_Weight: Number(row.Vehicle_Weight) || 0,
+
+        Serial_Number: row.Serial_Number || row.Registration_Number || '',
+        Registration_Number: row.Registration_Number || row.Serial_Number || '',
+        Registration_Expiry: regExp,
+        License_Expiry: regExp,
+        Insurance_Expiry: insExp,
+        Periodic_Inspection_Expiry: inspExp,
+        Inspection_Expiry: inspExp,
+
+        Operational_Status: row.Operational_Status || 'ACTIVE',
+        Ownership_Type: row.Ownership_Type || 'OWNED',
+        Vehicle_Type: row.Vehicle_Type || 'SEDAN',
+        Fuel_Type: row.Fuel_Type || 'GASOLINE_91',
+        Tank_Capacity: Number(row.Tank_Capacity) || 50,
+        Current_Odometer: Number(row.Current_Odometer) || 0,
+        Initial_Odometer: Number(row.Initial_Odometer || row.Current_Odometer) || 0,
+        Readiness_Index: row.Readiness_Index !== undefined ? Number(row.Readiness_Index) : 100,
+        Readiness_Score: row.Readiness_Score !== undefined ? Number(row.Readiness_Score) : 100,
+        Readiness_Reasons: Array.isArray(row.Readiness_Reasons) ? row.Readiness_Reasons.join(",") : (row.Readiness_Reasons || ""),
+
+        Branch: row.Branch || '',
+        Location: row.Location || '',
+        Engine_Number: row.Engine_Number || '',
+        Notes: row.Notes || '',
+        Image_URL: row.Image_URL || '',
+
+        CreatedAt: now,
+        UpdatedAt: now,
+        CreatedBy: createdBy,
+        UpdatedBy: createdBy,
+        IsDeleted: false,
+        DeletedAt: '',
+        DeletedBy: '',
+        ArchiveReason: ''
+      };
+
+      insertRow('Vehicles', vehicleObj);
+      insertedRecords.push(vehicleObj);
+    }
+
+    SpreadsheetApp.flush();
+
+    // Verify written rows physically in sheet
+    const verifyData = getTableData('Vehicles', { CompanyID: companyId, includeDeleted: true });
+    const verifiedIds = new Set(verifyData.map(v => v.Vehicle_ID));
+    const confirmedInserted = insertedRecords.filter(v => verifiedIds.has(v.Vehicle_ID));
+
+    // Audit log
+    logAudit(companyId, createdBy, 'FLEET', 'BULK_IMPORT', 'Vehicles', 'BATCH-' + Date.now(), null, {
+      requested: vehiclesList.length,
+      inserted: confirmedInserted.length,
+      failed: errors.length
+    });
+
+    return {
+      success: confirmedInserted.length > 0 || (vehiclesList.length === 0 && errors.length === 0),
+      requested: vehiclesList.length,
+      inserted: confirmedInserted.length,
+      updated: 0,
+      skipped: vehiclesList.length - confirmedInserted.length - errors.length,
+      failed: errors.length,
+      errors: errors,
+      data: confirmedInserted
+    };
+  } finally {
+    lock.releaseLock();
   }
-  return { importedCount: results.length, data: results };
 }
 

@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Vehicle, OperationalStatus } from '@/types/fleet';
 import { Employee } from '@/types/models';
 import { employeeService } from '@/services/employeeService';
 import { fleetService } from '@/services/fleetService';
 import { 
+  DEFAULT_VEHICLE_BRANDS, 
+  DEFAULT_VEHICLE_COLORS, 
+  DEFAULT_REGISTRATION_TYPES, 
+  calculateExpiryStatus 
+} from '@/data/fleetMasterData';
+import { 
   Truck, Car, UserCheck, ShieldAlert, X, Sparkles, 
-  Calendar, Hash, Scale, User, Shield, FileCheck, Info
+  Calendar, Hash, Scale, User, Shield, FileCheck, Info,
+  Fuel, Palette, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 
 interface VehicleModalProps {
@@ -36,9 +43,13 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
   // 3. Vehicle Specifications (مواصفات المركبة)
   const [brand, setBrand] = useState(vehicle?.Brand || 'تويوتا');
   const [model, setModel] = useState(vehicle?.Model || '');
+  const [customModel, setCustomModel] = useState('');
+  const [isCustomModelActive, setIsCustomModelActive] = useState(false);
   const [manufacturingYear, setManufacturingYear] = useState<number>(vehicle?.Manufacturing_Year || vehicle?.Year || new Date().getFullYear());
   const [color, setColor] = useState(vehicle?.Color || 'أبيض');
   const [registrationType, setRegistrationType] = useState(vehicle?.Registration_Type || 'خصوصي');
+  const [fuelType, setFuelType] = useState(vehicle?.Fuel_Type || 'GASOLINE_91');
+  const [tankCapacity, setTankCapacity] = useState<number | ''>(vehicle?.Tank_Capacity ?? 50);
   const [loadCapacity, setLoadCapacity] = useState<number | ''>(vehicle?.Load_Capacity ?? '');
   const [vehicleWeight, setVehicleWeight] = useState<number | ''>(vehicle?.Vehicle_Weight ?? '');
 
@@ -55,6 +66,15 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Available models based on selected brand
+  const currentBrandObj = useMemo(() => {
+    return DEFAULT_VEHICLE_BRANDS.find(b => b.brand.toLowerCase() === brand.toLowerCase() || (b.brandEn && b.brandEn.toLowerCase() === brand.toLowerCase()));
+  }, [brand]);
+
+  const availableModels = useMemo(() => {
+    return currentBrandObj ? currentBrandObj.models : [];
+  }, [currentBrandObj]);
+
   useEffect(() => {
     if (isOpen) {
       loadEmployees();
@@ -69,11 +89,29 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
         setSerialNumber(vehicle.Serial_Number || vehicle.Registration_Number || '');
         setPlateNumber(vehicle.Plate_Number || '');
 
-        setBrand(vehicle.Brand || '');
-        setModel(vehicle.Model || '');
+        const vBrand = vehicle.Brand || 'تويوتا';
+        setBrand(vBrand);
+
+        const vModel = vehicle.Model || '';
+        const bObj = DEFAULT_VEHICLE_BRANDS.find(b => b.brand === vBrand || b.brandEn === vBrand);
+        if (bObj && bObj.models.includes(vModel)) {
+          setModel(vModel);
+          setIsCustomModelActive(false);
+          setCustomModel('');
+        } else if (vModel) {
+          setModel('CUSTOM');
+          setIsCustomModelActive(true);
+          setCustomModel(vModel);
+        } else {
+          setModel('');
+          setIsCustomModelActive(false);
+        }
+
         setManufacturingYear(vehicle.Manufacturing_Year || vehicle.Year || new Date().getFullYear());
         setColor(vehicle.Color || 'أبيض');
         setRegistrationType(vehicle.Registration_Type || 'خصوصي');
+        setFuelType(vehicle.Fuel_Type || 'GASOLINE_91');
+        setTankCapacity(vehicle.Tank_Capacity ?? 50);
         setLoadCapacity(vehicle.Load_Capacity ?? '');
         setVehicleWeight(vehicle.Vehicle_Weight ?? '');
 
@@ -96,10 +134,14 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
         setPlateNumber('');
 
         setBrand('تويوتا');
-        setModel('');
+        setModel('كامري');
+        setIsCustomModelActive(false);
+        setCustomModel('');
         setManufacturingYear(new Date().getFullYear());
         setColor('أبيض');
         setRegistrationType('خصوصي');
+        setFuelType('GASOLINE_91');
+        setTankCapacity(50);
         setLoadCapacity('');
         setVehicleWeight('');
 
@@ -129,6 +171,31 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
     }
   };
 
+  const handleBrandChange = (newBrand: string) => {
+    setBrand(newBrand);
+    // When brand changes, clear or reset model if not valid for new brand
+    const newBrandObj = DEFAULT_VEHICLE_BRANDS.find(b => b.brand === newBrand);
+    if (newBrandObj && newBrandObj.models.length > 0) {
+      if (!newBrandObj.models.includes(model)) {
+        setModel(newBrandObj.models[0]);
+        setIsCustomModelActive(false);
+        setCustomModel('');
+      }
+    } else {
+      setModel('');
+    }
+  };
+
+  const handleModelChange = (newModelVal: string) => {
+    if (newModelVal === 'CUSTOM') {
+      setIsCustomModelActive(true);
+      setModel('CUSTOM');
+    } else {
+      setIsCustomModelActive(false);
+      setModel(newModelVal);
+    }
+  };
+
   const handleEmployeeSelect = (empId: string) => {
     setAssignedEmployeeId(empId);
     if (!empId) {
@@ -147,14 +214,20 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
 
   if (!isOpen) return null;
 
+  const resolvedModel = isCustomModelActive ? customModel.trim() : model.trim();
+
+  const regExpiryStatus = calculateExpiryStatus(registrationExpiry);
+  const insExpiryStatus = calculateExpiryStatus(insuranceExpiry);
+  const inspExpiryStatus = calculateExpiryStatus(periodicInspectionExpiry);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!plateNumber.trim()) {
       setErrorMsg('يرجى إدخال رقم اللوحة');
       return;
     }
-    if (!brand.trim() || !model.trim()) {
-      setErrorMsg('يرجى إدخال الماركة والطراز');
+    if (!brand.trim() || !resolvedModel) {
+      setErrorMsg('يرجى اختيار الماركة والطراز بشكل صحيح');
       return;
     }
 
@@ -176,14 +249,19 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
         // Identification & Specs
         VIN_Chassis_Number: vinChassisNumber.trim(),
         VIN: vinChassisNumber.trim(),
+        Chassis_Number: vinChassisNumber.trim(),
         Serial_Number: serialNumber.trim(),
+        Registration_Number: serialNumber.trim(),
         Plate_Number: plateNumber.trim(),
         Brand: brand.trim(),
-        Model: model.trim(),
+        Make: brand.trim(),
+        Model: resolvedModel,
         Manufacturing_Year: Number(manufacturingYear) || new Date().getFullYear(),
         Year: Number(manufacturingYear) || new Date().getFullYear(),
         Color: color.trim(),
         Registration_Type: registrationType.trim(),
+        Fuel_Type: fuelType as any,
+        Tank_Capacity: typeof tankCapacity === 'number' ? tankCapacity : 50,
         Load_Capacity: typeof loadCapacity === 'number' ? loadCapacity : 0,
         Vehicle_Weight: typeof vehicleWeight === 'number' ? vehicleWeight : 0,
 
@@ -197,6 +275,7 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
         // Operational Status
         Operational_Status: status,
         Current_Odometer: typeof currentOdometer === 'number' ? currentOdometer : 0,
+        Initial_Odometer: vehicle?.Initial_Odometer ?? (typeof currentOdometer === 'number' ? currentOdometer : 0),
         Notes: notes.trim(),
 
         // Primary Driver synced for compatibility
@@ -211,14 +290,14 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
         res = await fleetService.createVehicle(payload, companyId);
       }
 
-      if (res.success && res.data) {
+      if (res && res.success && res.data) {
         onSuccess(res.data);
         onClose();
       } else {
-        setErrorMsg(res.message || 'حدث خطأ أثناء حفظ المركبة');
+        setErrorMsg(res?.message || 'حدث خطأ أثناء حفظ المركبة في الخادم. تم الاحتفاظ بالبيانات لإعادة المحاولة.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'فشل الاتصال بالنظام');
+      setErrorMsg(err.message || 'فشل الاتصال بالنظام المركزي');
     } finally {
       setIsSubmitting(false);
     }
@@ -240,7 +319,7 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                 {isEdit ? `تعديل سجل المركبة (${vehicle?.Plate_Number})` : 'إضافة مركبة جديدة إلى Vehicle Master'}
               </h3>
               <p className="text-xs text-slate-500">
-                تسجيل بيانات المركبة الفعلية، مواصفات الهيكل، وتوثيق الربط بقسم الموظفين
+                مزامنة وحفظ فوري مع قاعدة البيانات المركزية، قوائم معتمدة، وربط تلقائي بالموظفين
               </p>
             </div>
           </div>
@@ -257,7 +336,7 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
             {errorMsg && (
               <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 shrink-0" />
-                {errorMsg}
+                <span>{errorMsg}</span>
               </div>
             )}
 
@@ -266,7 +345,7 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
               <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-2.5">
                 <User className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  1. بيانات الملكية والاستخدام
+                  1. بيانات الملكية والمستخدم
                 </h4>
               </div>
 
@@ -293,20 +372,20 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                     type="text"
                     value={ownerIdNumber}
                     onChange={(e) => setOwnerIdNumber(e.target.value)}
-                    placeholder="رقم الهوية الوطنية / السجل التجاري"
+                    placeholder="رقم السجل التجاري / الهوية"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    المستخدم (Assigned_User_Name)
+                    المستخدم الفعلي (Assigned_User_Name)
                   </label>
                   <input
                     type="text"
                     value={assignedUserName}
                     onChange={(e) => setAssignedUserName(e.target.value)}
-                    placeholder="اسم السائق أو المستخدم الفعلي"
+                    placeholder="اسم السائق أو العهدة"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -332,16 +411,16 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                     <label className="block text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-1.5 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <UserCheck className="w-3.5 h-3.5" />
-                        ربط بموظف معتمد في النظام (Assigned_Employee_ID)
+                        ربط بموظف معتمد في النظام (Employee_ID Key)
                       </span>
-                      {isLoadingEmployees && <span className="text-[10px] text-slate-400">جاري تحميل الموظفين...</span>}
+                      {isLoadingEmployees && <span className="text-[10px] text-slate-400">جاري التحميل...</span>}
                     </label>
                     <select
                       value={assignedEmployeeId}
                       onChange={(e) => handleEmployeeSelect(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="">-- غير مرتبط بموظف (أو إدخال يدوي) --</option>
+                      <option value="">-- بدون ربط بموظف (إدخال يدوي حر) --</option>
                       {employees.map(emp => (
                         <option key={emp.EmployeeID} value={emp.EmployeeID}>
                           {emp.EmployeeCode ? `[${emp.EmployeeCode}] ` : ''}{emp.ArabicName || emp.EnglishName} {emp.Role ? `(${emp.Role})` : ''} - {emp.Status === 'ACTIVE' ? 'نشط' : emp.Status}
@@ -358,17 +437,17 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                           {selectedEmployee.ArabicName || selectedEmployee.EnglishName}
                         </div>
                         <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                          كود: {selectedEmployee.EmployeeCode || selectedEmployee.EmployeeID} • الجوال: {selectedEmployee.Mobile || 'غير مسجل'}
+                          كود الموظف: {selectedEmployee.EmployeeCode || selectedEmployee.EmployeeID} • الجوال: {selectedEmployee.Mobile || 'غير مسجل'}
                         </div>
                       </div>
                       <span className="px-2 py-0.5 rounded-md bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold">
-                        موظف مطابق
+                        مرتبط بنجاح
                       </span>
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-500 flex items-center gap-2">
                       <Info className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span>يمكنك ترك الحقل فارغاً أو ربط المركبة بأحد موظفي الشركة لتمكين تتبع الرحلات والعهد</span>
+                      <span>اختيار موظف يملأ الاسم ورقم الهوية تلقائياً ويربط بيانات السائق بالمركبة</span>
                     </div>
                   )}
                 </div>
@@ -441,42 +520,77 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
               </div>
             </div>
 
-            {/* SECTION 3: مواصفات المركبة */}
+            {/* SECTION 3: مواصفات المركبة (Controlled Lists & Dependent Dropdowns) */}
             <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 space-y-4">
               <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-2.5">
                 <Car className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  3. مواصفات المركبة
+                  3. مواصفات المركبة والمحرك
                 </h4>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Brand Searchable/Controlled Select */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     الماركة (Brand) *
                   </label>
-                  <input
-                    type="text"
-                    required
+                  <select
                     value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    placeholder="تويوتا، ايسوزو، فورد، إلخ"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
-                  />
+                    onChange={(e) => handleBrandChange(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-bold focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {DEFAULT_VEHICLE_BRANDS.map(b => (
+                      <option key={b.brand} value={b.brand}>
+                        {b.brand} {b.brandEn ? `(${b.brandEn})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
+                {/* Dependent Model Dropdown */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     الطراز (Model) *
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="هايلكس، دينا NPR، يارس..."
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
-                  />
+                  {!brand ? (
+                    <div className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs italic">
+                      اختر الماركة أولاً
+                    </div>
+                  ) : isCustomModelActive ? (
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        required
+                        value={customModel}
+                        onChange={(e) => setCustomModel(e.target.value)}
+                        placeholder="اكتب الطراز يدوياً..."
+                        className="w-full px-3 py-2 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomModelActive(false);
+                          setModel(availableModels[0] || '');
+                        }}
+                        className="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px]"
+                        title="العودة للقائمة"
+                      >
+                        قائمة
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={model}
+                      onChange={(e) => handleModelChange(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
+                    >
+                      {availableModels.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                      <option value="CUSTOM">+ طراز آخر (إدخال يدوي)...</option>
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -494,19 +608,24 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                   />
                 </div>
 
+                {/* Controlled Color Dropdown */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1">
+                    <Palette className="w-3.5 h-3.5" />
                     اللون (Color)
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={color}
                     onChange={(e) => setColor(e.target.value)}
-                    placeholder="أبيض، رصاصي، أسود..."
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-indigo-500"
-                  />
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {DEFAULT_VEHICLE_COLORS.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
 
+                {/* Controlled Registration Type */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     نوع التسجيل (Registration_Type)
@@ -516,13 +635,44 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                     onChange={(e) => setRegistrationType(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
                   >
-                    <option value="خصوصي">خصوصي</option>
-                    <option value="نقل خاص">نقل خاص</option>
-                    <option value="نقل عام">نقل عام</option>
-                    <option value="حافلة خاصة">حافلة خاصة</option>
-                    <option value="معدة ثقيلة">معدة ثقيلة</option>
-                    <option value="دراجة آلية">دراجة آلية</option>
+                    {DEFAULT_REGISTRATION_TYPES.map(rt => (
+                      <option key={rt} value={rt}>{rt}</option>
+                    ))}
                   </select>
+                </div>
+
+                {/* Fuel Type */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1">
+                    <Fuel className="w-3.5 h-3.5" />
+                    نوع الوقود (Fuel_Type)
+                  </label>
+                  <select
+                    value={fuelType}
+                    onChange={(e) => setFuelType(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs"
+                  >
+                    <option value="GASOLINE_91">بنزين 91</option>
+                    <option value="GASOLINE_95">بنزين 95</option>
+                    <option value="DIESEL">ديزل</option>
+                    <option value="HYBRID">هايبرد (هجين)</option>
+                    <option value="ELECTRIC">كهربائي</option>
+                  </select>
+                </div>
+
+                {/* Tank Capacity */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    سعة التانكي (لتر)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={tankCapacity}
+                    onChange={(e) => setTankCapacity(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="مثال: 50"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-indigo-500"
+                  />
                 </div>
 
                 <div>
@@ -555,18 +705,19 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
               </div>
             </div>
 
-            {/* SECTION 4: تواريخ الوثائق الرسمية */}
+            {/* SECTION 4: تواريخ الوثائق الرسمية مع التنبيه الفوري */}
             <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 space-y-4">
               <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-700/60 pb-2.5">
                 <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                  4. تواريخ الوثائق والانتهاء
+                  4. تواريخ الوثائق والتنبيهات الملونة
                 </h4>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                {/* Registration Expiry */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     انتهاء الاستمارة (Registration_Expiry)
                   </label>
                   <input
@@ -575,10 +726,17 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                     onChange={(e) => setRegistrationExpiry(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500"
                   />
+                  {registrationExpiry && (
+                    <div className={`p-1.5 px-2.5 rounded-lg border text-[11px] flex items-center justify-between ${regExpiryStatus.badgeClass}`}>
+                      <span>حالة الاستمارة:</span>
+                      <span>{regExpiryStatus.label}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                {/* Insurance Expiry */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     انتهاء التأمين (Insurance_Expiry)
                   </label>
                   <input
@@ -587,11 +745,18 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                     onChange={(e) => setInsuranceExpiry(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500"
                   />
+                  {insuranceExpiry && (
+                    <div className={`p-1.5 px-2.5 rounded-lg border text-[11px] flex items-center justify-between ${insExpiryStatus.badgeClass}`}>
+                      <span>حالة التأمين:</span>
+                      <span>{insExpiryStatus.label}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    انتهاء الفحص الدوري (Periodic_Inspection_Expiry)
+                {/* Periodic Inspection Expiry */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    انتهاء الفحص الدوري (Periodic_Inspection)
                   </label>
                   <input
                     type="date"
@@ -599,6 +764,12 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
                     onChange={(e) => setPeriodicInspectionExpiry(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-indigo-500"
                   />
+                  {periodicInspectionExpiry && (
+                    <div className={`p-1.5 px-2.5 rounded-lg border text-[11px] flex items-center justify-between ${inspExpiryStatus.badgeClass}`}>
+                      <span>حالة الفحص:</span>
+                      <span>{inspExpiryStatus.label}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -667,7 +838,8 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
             >
               إلغاء
             </button>
@@ -679,7 +851,7 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
               {isSubmitting ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white border-r-transparent rounded-full animate-spin" />
-                  جاري الحفظ...
+                  جاري الحفظ في الخادم...
                 </>
               ) : (
                 <>

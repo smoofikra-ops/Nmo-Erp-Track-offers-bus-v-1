@@ -96,14 +96,17 @@ export interface Vehicle {
   // 2. Vehicle Identification & Specs (بيانات تعريف المركبة)
   VIN_Chassis_Number?: string;     // رقم الهيكل
   VIN?: string;                    // Alias for VIN_Chassis_Number
+  Chassis_Number?: string;         // Alias for VIN_Chassis_Number
   Serial_Number?: string;          // الرقم التسلسلي
   Plate_Number: string;            // رقم اللوحة
   Brand: string;                   // الماركة
+  Make?: string;                   // Alias for Brand
   Model: string;                   // الطراز
   Manufacturing_Year?: number;     // سنة الصنع
   Year: number;                    // Alias for backward compatibility
   Color: string;                   // اللون
   Registration_Type?: string;      // نوع التسجيل (خصوصي، نقل عام، نقل خاص، إلخ)
+  Tank_Capacity?: number;          // سعة خزان الوقود باللتر
   Load_Capacity?: number;          // الحمولة (كجم / طن)
   Vehicle_Weight?: number;         // الوزن (كجم)
   
@@ -161,6 +164,7 @@ export interface Vehicle {
   UpdatedBy?: string;
   ArchivedAt?: string;
   ArchivedBy?: string;
+  ArchiveReason?: string;
   IsDeleted?: boolean;
   DeletedAt?: string;
   DeletedBy?: string;

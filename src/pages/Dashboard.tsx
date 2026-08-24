@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { commissionService } from '@/services/commissionService';
 import { CommissionRecord, CommissionTypeCategory } from '@/types/commissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, Package, Lock, Truck, Gauge, Wrench, ArrowUpRight } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, ChevronUp, Package, Lock, Truck, Gauge, Wrench, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { fleetService } from '@/services/fleetService';
 import { format, startOfMonth, endOfDay, subDays, startOfYear, subMonths, endOfMonth, startOfDay } from 'date-fns';
@@ -22,6 +22,7 @@ export function Dashboard() {
   const [isMetricsUnlocked, setIsMetricsUnlocked] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [isAgentPerformanceOpen, setIsAgentPerformanceOpen] = useState(false);
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
@@ -450,8 +451,8 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Alerts and Collection Progress */}
-        <div className="space-y-6">
+        {/* Alerts and Fleet Operations in Right Column */}
+        <div className="space-y-4 flex flex-col justify-between">
           <Card className="border-rose-200 bg-rose-50">
             <CardHeader className="pb-2">
               <CardTitle className="text-base text-rose-800 flex items-center gap-2">
@@ -461,150 +462,170 @@ export function Dashboard() {
             </CardHeader>
             <CardContent>
               {agentsWithDebt.length > 0 ? (
-                <div className="space-y-3 mt-2">
-                  <p className="text-sm text-rose-700 font-medium">يوجد {agentsWithDebt.length} مندوبين لديهم مبالغ غير محصلة:</p>
-                  <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
+                <div className="space-y-2 mt-1">
+                  <p className="text-xs text-rose-700 font-medium">يوجد {agentsWithDebt.length} مندوبين لديهم مبالغ غير محصلة:</p>
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                     {agentsWithDebt.map((agent, i) => (
-                      <div key={i} className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-rose-100 shadow-sm">
-                        <span className="text-sm font-bold text-slate-700">{agent.name}</span>
-                        <span className="text-sm font-black text-rose-600">{agent.remaining.toFixed(2)} ر.س</span>
+                      <div key={i} className="flex justify-between items-center bg-white p-2 rounded-lg border border-rose-100 shadow-xs">
+                        <span className="text-xs font-bold text-slate-700">{agent.name}</span>
+                        <span className="text-xs font-black text-rose-600">{agent.remaining.toFixed(2)} ر.س</span>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-emerald-600 font-medium p-4 text-center bg-white rounded-lg border border-emerald-100 shadow-sm">لا توجد مبالغ معلقة للتحصيل.</p>
+                <p className="text-xs text-emerald-600 font-medium p-3 text-center bg-white rounded-lg border border-emerald-100 shadow-xs">لا توجد مبالغ معلقة للتحصيل.</p>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Compact Fleet Operations Summary */}
+          <Card className="border-indigo-100 bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white overflow-hidden shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-white/10 text-indigo-400">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      نظام إدارة المركبات والأسطول
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                        نشط
+                      </span>
+                    </h3>
+                  </div>
+                </div>
+
+                <Link
+                  to="/fleet"
+                  className="px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1 shrink-0"
+                >
+                  <span>منصة الأسطول</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-white/10 text-center">
+                <div className="p-2 rounded-lg bg-white/5 border border-white/5">
+                  <span className="text-[10px] text-indigo-200/70 block">في الخدمة</span>
+                  <span className="text-sm font-black font-mono text-emerald-400">
+                    {fleetKpis?.activeVehicles ?? 0}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/5 border border-white/5">
+                  <span className="text-[10px] text-indigo-200/70 block">في الصيانة</span>
+                  <span className="text-sm font-black font-mono text-amber-400">
+                    {fleetKpis?.inMaintenanceVehicles ?? 0}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/5 border border-white/5">
+                  <span className="text-[10px] text-indigo-200/70 block">الجاهزية</span>
+                  <span className="text-sm font-black font-mono text-teal-300">
+                    {(fleetKpis?.totalVehicles ?? 0) > 0 ? `${fleetKpis?.averageReadinessIndex}%` : '100%'}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-white/5 border border-white/5">
+                  <span className="text-[10px] text-indigo-200/70 block">تنبيهات</span>
+                  <span className="text-sm font-black font-mono text-rose-300">
+                    {((fleetKpis?.expiringInsuranceCount ?? 0) + (fleetKpis?.expiringInspectionCount ?? 0) + (fleetKpis?.expiringLicenseCount ?? 0))}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Fleet Operations Overview Card */}
-      <Card className="border-indigo-100 bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white overflow-hidden shadow-lg">
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10 text-indigo-400">
-                <Truck className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
-                  نظام إدارة المركبات والأسطول
-                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                    تشغيلي نشط
-                  </span>
-                </h3>
-                <p className="text-xs text-indigo-200/70 mt-0.5">
-                  متابعة حالة وتكاليف المركبات، استهلاك الوقود، والصيانة الدورية للأسطول
-                </p>
-              </div>
+      {/* Collapsible Agent Performance Table */}
+      <Card className="border-slate-200 transition-all duration-300">
+        <CardHeader 
+          onClick={() => setIsAgentPerformanceOpen(!isAgentPerformanceOpen)}
+          className="cursor-pointer hover:bg-slate-50/70 transition-colors py-4 select-none"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <CardTitle className="text-base font-bold text-slate-900">
+                أداء المندوبين وتفاصيل التحصيل
+              </CardTitle>
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
+                {filteredRecords.length} سجل ({agentStatsList.length} مندوب)
+              </span>
             </div>
 
-            <div className="flex items-center gap-2.5 w-full md:w-auto">
-              <Link
-                to="/fleet"
-                className="w-full md:w-auto text-center px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold transition-all shadow-md shadow-indigo-500/25 flex items-center justify-center gap-1.5"
-              >
-                فتح منصة الأسطول
-                <ArrowUpRight className="w-4 h-4" />
-              </Link>
+            <div className="flex items-center gap-2 text-slate-500 text-xs font-medium">
+              <span>{isAgentPerformanceOpen ? 'إخفاء التفاصيل' : 'عرض التفاصيل'}</span>
+              <div className="p-1 rounded-md bg-slate-100 text-slate-600">
+                {isAgentPerformanceOpen ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </div>
             </div>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-5 border-t border-white/10">
-            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-              <span className="text-[11px] text-indigo-200/60 block mb-1">المركبات في الخدمة</span>
-              <span className="text-lg font-black font-mono text-emerald-400">
-                {fleetKpis?.activeVehicles ?? 0} مركبات
-              </span>
-            </div>
-            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-              <span className="text-[11px] text-indigo-200/60 block mb-1">في ورشة الصيانة</span>
-              <span className="text-lg font-black font-mono text-amber-400">
-                {fleetKpis?.inMaintenanceVehicles ?? 0} مركبة
-              </span>
-            </div>
-            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-              <span className="text-[11px] text-indigo-200/60 block mb-1">متوسط مؤشر الجاهزية</span>
-              <span className="text-lg font-black font-mono text-teal-300">
-                {(fleetKpis?.totalVehicles ?? 0) > 0 ? `${fleetKpis?.averageReadinessIndex}%` : '100%'}
-              </span>
-            </div>
-            <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-              <span className="text-[11px] text-indigo-200/60 block mb-1">تنبيهات التجديد</span>
-              <span className="text-lg font-black font-mono text-rose-300">
-                {((fleetKpis?.expiringInsuranceCount ?? 0) + (fleetKpis?.expiringInspectionCount ?? 0) + (fleetKpis?.expiringLicenseCount ?? 0))} مستندات
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Top Agents Table */}
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="text-base">أداء المندوبين وتفاصيل التحصيل ({filteredRecords.length} سجل)</CardTitle>
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm text-right hidden md:table">
-            <thead className="bg-slate-50 text-slate-500 border-b">
-              <tr>
-                <th className="px-6 py-4 font-medium">اسم المندوب</th>
-                <th className="px-6 py-4 font-medium">إجمالي العمولة المستحقة</th>
-                <th className="px-6 py-4 font-medium">المطلوب تحصيله</th>
-                <th className="px-6 py-4 font-medium">تم تحصيله (دفعات وتسويات)</th>
-                <th className="px-6 py-4 font-medium">المتبقي للتحصيل</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {agentStatsList.length === 0 ? (
-                 <tr><td colSpan={5} className="text-center py-8 text-slate-500">لا توجد بيانات مطابقة للبحث</td></tr>
-              ) : agentStatsList.map((agent, i) => (
-                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900">{agent.name}</td>
-                  <td className="px-6 py-4 font-bold text-indigo-600">{agent.commission.toFixed(2)} ر.س</td>
-                  <td className="px-6 py-4 text-slate-600">{agent.required.toFixed(2)} ر.س</td>
-                  <td className="px-6 py-4 text-emerald-600 font-medium">{agent.collected.toFixed(2)} ر.س</td>
-                  <td className={`px-6 py-4 font-black ${agent.remaining > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
-                    {agent.remaining.toFixed(2)} ر.س
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
 
-          {/* Mobile Cards View */}
-          <div className="md:hidden divide-y divide-slate-100 p-2">
-            {agentStatsList.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">لا توجد بيانات</div>
-            ) : (
-              agentStatsList.map((agent, i) => (
-                <div key={i} className="bg-slate-50 border border-slate-100 rounded-lg p-4 mb-3 space-y-3 shadow-sm">
-                  <div className="flex justify-between items-center border-b pb-2">
-                    <span className="font-bold text-slate-900 text-lg">{agent.name}</span>
-                    <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{agent.commission.toFixed(2)} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-600">المطلوب تحصيله:</span>
-                    <span className="font-medium text-slate-800">{agent.required.toFixed(2)} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-600">تم تحصيله (تسويات):</span>
-                    <span className="font-medium text-emerald-600">{agent.collected.toFixed(2)} ر.س</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
-                    <span className="font-bold text-slate-800">المتبقي للتحصيل:</span>
-                    <span className={`font-black ${agent.remaining > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
+        {isAgentPerformanceOpen && (
+          <CardContent className="p-0 overflow-x-auto border-t border-slate-100 animate-fadeIn">
+            <table className="w-full text-sm text-right hidden md:table">
+              <thead className="bg-slate-50 text-slate-500 border-b">
+                <tr>
+                  <th className="px-6 py-4 font-medium">اسم المندوب</th>
+                  <th className="px-6 py-4 font-medium">إجمالي العمولة المستحقة</th>
+                  <th className="px-6 py-4 font-medium">المطلوب تحصيله</th>
+                  <th className="px-6 py-4 font-medium">تم تحصيله (دفعات وتسويات)</th>
+                  <th className="px-6 py-4 font-medium">المتبقي للتحصيل</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {agentStatsList.length === 0 ? (
+                   <tr><td colSpan={5} className="text-center py-8 text-slate-500">لا توجد بيانات مطابقة للبحث</td></tr>
+                ) : agentStatsList.map((agent, i) => (
+                  <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 font-bold text-slate-900">{agent.name}</td>
+                    <td className="px-6 py-4 font-bold text-indigo-600">{agent.commission.toFixed(2)} ر.س</td>
+                    <td className="px-6 py-4 text-slate-600">{agent.required.toFixed(2)} ر.س</td>
+                    <td className="px-6 py-4 text-emerald-600 font-medium">{agent.collected.toFixed(2)} ر.س</td>
+                    <td className={`px-6 py-4 font-black ${agent.remaining > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
                       {agent.remaining.toFixed(2)} ر.س
-                    </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Mobile Cards View */}
+            <div className="md:hidden divide-y divide-slate-100 p-2">
+              {agentStatsList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500">لا توجد بيانات</div>
+              ) : (
+                agentStatsList.map((agent, i) => (
+                  <div key={i} className="bg-slate-50 border border-slate-100 rounded-lg p-4 mb-3 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center border-b pb-2">
+                      <span className="font-bold text-slate-900 text-lg">{agent.name}</span>
+                      <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded">{agent.commission.toFixed(2)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">المطلوب تحصيله:</span>
+                      <span className="font-medium text-slate-800">{agent.required.toFixed(2)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600">تم تحصيله (تسويات):</span>
+                      <span className="font-medium text-emerald-600">{agent.collected.toFixed(2)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm pt-2 border-t border-slate-200">
+                      <span className="font-bold text-slate-800">المتبقي للتحصيل:</span>
+                      <span className={`font-black ${agent.remaining > 0 ? 'text-rose-600' : 'text-emerald-500'}`}>
+                        {agent.remaining.toFixed(2)} ر.س
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-  
-        </CardContent>
+                ))
+              )}
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   );

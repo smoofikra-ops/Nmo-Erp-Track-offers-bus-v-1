@@ -4,6 +4,7 @@ import { Vehicle } from '@/types/fleet';
 import { Employee } from '@/types/models';
 import { fleetService } from '@/services/fleetService';
 import { employeeService } from '@/services/employeeService';
+import { formatToIsoDateString } from '@/data/fleetMasterData';
 import { 
   Download, Upload, FileSpreadsheet, Check, AlertCircle, 
   X, CheckCircle2, AlertTriangle, UserCheck, ShieldAlert, 
@@ -45,7 +46,14 @@ export function ImportExportModal({
   const [filterType, setFilterType] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [importSummary, setImportSummary] = useState<{ imported: number; skipped: number } | null>(null);
+  const [importSummary, setImportSummary] = useState<{ 
+    imported: number; 
+    failed: number; 
+    skipped: number; 
+    total: number;
+    errors: { row?: number; error: string }[];
+    message: string;
+  } | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -403,9 +411,13 @@ export function ImportExportModal({
           const color = getVal(colColor) || 'أبيض';
           const year = Number(getVal(colYear)) || new Date().getFullYear();
           const serial = getVal(colSerial);
-          const regExpiry = getVal(colRegExpiry);
-          const insExpiry = getVal(colInsExpiry);
-          const inspExpiry = getVal(colInspExpiry);
+          const rawRegExpiry = colRegExpiry >= 0 ? row[colRegExpiry] : '';
+          const rawInsExpiry = colInsExpiry >= 0 ? row[colInsExpiry] : '';
+          const rawInspExpiry = colInspExpiry >= 0 ? row[colInspExpiry] : '';
+          
+          const regExpiry = formatToIsoDateString(rawRegExpiry);
+          const insExpiry = formatToIsoDateString(rawInsExpiry);
+          const inspExpiry = formatToIsoDateString(rawInspExpiry);
           const odometer = Number(getVal(colOdometer)) || 0;
           const statusRaw = getVal(colStatus).toUpperCase();
           const notes = getVal(colNotes);
@@ -544,7 +556,7 @@ export function ImportExportModal({
     );
 
     if (validRowsToImport.length === 0) {
-      setErrorMessage('لا توجد سجلات صالحة للاستيراد. يرجى تصحيح الأخطاء أولاً.');
+      setErrorMessage('لا توجد سجلات صالحة للاستيراد. يرجى مراجعة وتصحيح الأخطاء أولاً.');
       return;
     }
 
@@ -552,23 +564,36 @@ export function ImportExportModal({
     setErrorMessage('');
 
     try {
-      let countSuccess = 0;
-      for (const rowItem of validRowsToImport) {
-        const res = await fleetService.createVehicle(rowItem.vehicle, companyId);
-        if (res.success) {
-          countSuccess++;
-        }
+      const vehiclesPayload = validRowsToImport.map(r => r.vehicle);
+      
+      const res = await fleetService.bulkImportVehicles(vehiclesPayload, companyId, {
+        id: 'ADMIN_USER',
+        name: 'مسؤول الأسطول',
+        role: 'ADMIN'
+      });
+
+      if (!res.success || (res.data && res.data.inserted === 0)) {
+        // Strict failure handling
+        const errDetails = res.data?.errors?.map(e => e.error).join(' | ') || res.message || 'فشل حفظ سجلات المركبات في قاعدة البيانات المركزية';
+        setErrorMessage(errDetails);
+        setIsProcessing(false);
+        return;
       }
 
       setImportSummary({
-        imported: countSuccess,
-        skipped: parsedRows.length - countSuccess,
+        imported: res.data.inserted,
+        failed: res.data.failed,
+        skipped: res.data.skipped,
+        total: res.data.requested,
+        errors: res.data.errors || [],
+        message: res.message
       });
 
+      // Reload fleet list from central database
       onImportSuccess();
     } catch (err: any) {
       console.error('Import execution error:', err);
-      setErrorMessage('حدث خطأ أثناء حفظ السجلات في قاعدة البيانات.');
+      setErrorMessage('حدث خطأ أثناء حفظ السجلات في قاعدة البيانات: ' + (err.message || ''));
     } finally {
       setIsProcessing(false);
     }
@@ -731,24 +756,86 @@ export function ImportExportModal({
                 </div>
               )}
 
-              {/* Import Completed Success Banner */}
+              {/* Import Completed Confirmation Banner */}
               {importSummary && (
-                <div className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6" />
+                <div className={`p-6 rounded-3xl border text-center space-y-4 ${
+                  importSummary.failed === 0 
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' 
+                    : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800'
+                }`}>
+                  <div className={`w-14 h-14 rounded-full mx-auto flex items-center justify-center shadow-inner ${
+                    importSummary.failed === 0 
+                      ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400' 
+                      : 'bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400'
+                  }`}>
+                    {importSummary.failed === 0 ? <CheckCircle2 className="w-7 h-7" /> : <AlertTriangle className="w-7 h-7" />}
                   </div>
-                  <h4 className="text-base font-bold text-emerald-900 dark:text-emerald-200">
-                    تم استيراد بيانات المركبات بنجاح!
-                  </h4>
-                  <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                    تمت إضافة <strong>{importSummary.imported}</strong> مركبة جديدة إلى سجل Vehicle Master وتحديث مؤشرات الجاهزية والربط بالموظفين.
-                  </p>
-                  <div className="pt-2">
+
+                  <div>
+                    <h4 className={`text-base font-black ${
+                      importSummary.failed === 0 ? 'text-emerald-900 dark:text-emerald-200' : 'text-amber-900 dark:text-amber-200'
+                    }`}>
+                      {importSummary.failed === 0 
+                        ? `تم استيراد وحفظ ${importSummary.imported} مركبة بنجاح في قاعدة البيانات المركزية`
+                        : `تم حفظ ${importSummary.imported} من أصل ${importSummary.total} مركبة. تعذر حفظ ${importSummary.failed} مركبة`}
+                    </h4>
+                    <p className={`text-xs mt-1 leading-relaxed ${
+                      importSummary.failed === 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'
+                    }`}>
+                      تمت معالجة السجلات والتحقق من ارتباط الموظفين وتحديث سجل Vehicle Master بنجاح.
+                    </p>
+                  </div>
+
+                  {/* Stats Badges */}
+                  <div className="grid grid-cols-3 gap-2.5 max-w-md mx-auto pt-1">
+                    <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                      <span className="text-[10px] text-slate-400 font-bold block">تم الحفظ الفعلي</span>
+                      <span className="text-lg font-black text-emerald-600">{importSummary.imported}</span>
+                    </div>
+                    <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                      <span className="text-[10px] text-slate-400 font-bold block">فشل / مستبعد</span>
+                      <span className={`text-lg font-black ${importSummary.failed > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                        {importSummary.failed}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center">
+                      <span className="text-[10px] text-slate-400 font-bold block">الإجمالي المطلوب</span>
+                      <span className="text-lg font-black text-slate-700 dark:text-slate-300">{importSummary.total}</span>
+                    </div>
+                  </div>
+
+                  {/* Backend Error Details if any */}
+                  {importSummary.errors && importSummary.errors.length > 0 && (
+                    <div className="text-right p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 space-y-2">
+                      <span className="text-xs font-bold text-rose-800 dark:text-rose-200 block">تفاصيل السجلات غير المحفوظة وأسباب الاستبعاد:</span>
+                      <ul className="text-xs text-rose-700 dark:text-rose-300 space-y-1 list-disc list-inside">
+                        {importSummary.errors.map((err, idx) => (
+                          <li key={idx}>
+                            {err.row ? `الصف ${err.row}: ` : ''}{err.error}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="pt-3 flex items-center justify-center gap-2">
                     <button
-                      onClick={onClose}
-                      className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm"
+                      type="button"
+                      onClick={() => {
+                        setFile(null);
+                        setParsedRows([]);
+                        setImportSummary(null);
+                      }}
+                      className="px-5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
-                      إغلاق والعودة لقائمة الأسطول
+                      استيراد ملف آخر
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20"
+                    >
+                      إغلاق وعرض الأسطول
                     </button>
                   </div>
                 </div>
