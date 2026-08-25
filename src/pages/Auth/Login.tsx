@@ -1,88 +1,26 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { motion, AnimatePresence } from 'motion/react';
 import {
   Layers,
   Mail,
   Lock,
   Eye,
   EyeOff,
-  Truck,
-  TrendingUp,
-  Package,
-  FileSpreadsheet,
-  Sparkles,
-  CheckCircle2,
   AlertCircle,
   ArrowRight,
   ShieldCheck,
-  ChevronLeft,
-  ChevronRight,
-  Bot
+  Sparkles
 } from 'lucide-react';
 import { settingsService } from '@/services/settingsService';
+import { Spatial3DCanvas } from '@/components/auth/Spatial3DCanvas';
 
-// Operational capability modules matching exact NMO ERP features
-const SYSTEM_CAPABILITIES = [
-  {
-    id: 'commissions',
-    title: 'العمولات والتحصيل المالي',
-    shortDesc: 'متابعة المستحقات، شرائح العمولات، ومطابقة مبالغ التسليم والدفع الإلكتروني.',
-    icon: TrendingUp,
-    badge: 'تتبع العمليات المالية',
-    color: 'from-emerald-500 to-teal-600',
-    lightColor: 'text-emerald-400',
-    borderColor: 'border-emerald-500/30',
-    bgColor: 'bg-emerald-500/10',
-    metric: 'دقة حسابات 100%'
-  },
-  {
-    id: 'fleet',
-    title: 'إدارة الأسطول والمركبات',
-    shortDesc: 'مراقبة جاهزية الشاحنات، تواريخ انتهاء رخص السير والفحص الدوري والتأمين.',
-    icon: Truck,
-    badge: 'جاهزية الأسطول',
-    color: 'from-blue-500 to-indigo-600',
-    lightColor: 'text-blue-400',
-    borderColor: 'border-blue-500/30',
-    bgColor: 'bg-blue-500/10',
-    metric: 'تنبيهات استباقية للوثائق'
-  },
-  {
-    id: 'inventory_quotes',
-    title: 'المخزون وعروض الأسعار',
-    shortDesc: 'إدارة كتالوج المنتجات، الكميات المتوفرة، وتوليد عروض أسعار تجارية فورية.',
-    icon: Package,
-    badge: 'المخزون والمنتجات',
-    color: 'from-amber-500 to-orange-600',
-    lightColor: 'text-amber-400',
-    borderColor: 'border-amber-500/30',
-    bgColor: 'bg-amber-500/10',
-    metric: 'تحديث فوري للكميات'
-  },
-  {
-    id: 'regin_ai',
-    title: 'مساعد ريجين والتقارير الذكية',
-    shortDesc: 'الاستعلام باللغة الطبيعية عن أداء العمليات واستخراج مؤشرات قياسية موحدة.',
-    icon: Bot,
-    badge: 'مساعد ذكي مدعوم بـ AI',
-    color: 'from-purple-500 to-indigo-600',
-    lightColor: 'text-purple-400',
-    borderColor: 'border-purple-500/30',
-    bgColor: 'bg-purple-500/10',
-    metric: 'استعلام مباشر وسريع'
-  }
-];
-
-// Typewriter practical operational phrases
+// Typewriter practical operational phrases highlighting a unified system
 const TYPEWRITER_PHRASES = [
-  'تابع العمليات اليومية واتخذ القرار من بيانات موحدة',
-  'راجع العمولات وسجل العمليات المالية بدقة',
-  'راقب حالة الأسطول وصلاحية الوثائق والتنبيهات',
-  'أدر المنتجات والكميات المتاحة وعروض الأسعار',
-  'استخرج تقارير الأداء التشغيلي والمالي الموحد',
-  'اسأل مساعد ريجين الذكي عن بياناتك باللغة الطبيعية'
+  'منظومة تشغيلية موحدة تربط كافة العمليات',
+  'العمليات، الأسطول، المخزون، والعمولات في فضاء متكامل',
+  'متابعة لحظية وتدفق بيانات مباشر لكافة الأقسام',
+  'رؤية شاملة ومساعد ذكي مدعوم بالذكاء الاصطناعي'
 ];
 
 export function Login() {
@@ -91,11 +29,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [logoUrl, setLogoUrl] = useState<string>('');
-
-  // Mouse Parallax coordinates
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Typewriter state
   const [typewriterText, setTypewriterText] = useState('');
@@ -136,19 +70,19 @@ export function Login() {
       if (typewriterText.length < currentPhrase.length) {
         timer = setTimeout(() => {
           setTypewriterText(currentPhrase.slice(0, typewriterText.length + 1));
-        }, 55 + Math.random() * 25);
+        }, 50 + Math.random() * 25);
       } else {
         // Pause at completion
         timer = setTimeout(() => {
           setIsDeleting(true);
-        }, 2400);
+        }, 2600);
       }
     } else {
       // Deleting backward
       if (typewriterText.length > 0) {
         timer = setTimeout(() => {
           setTypewriterText(currentPhrase.slice(0, typewriterText.length - 1));
-        }, 28);
+        }, 24);
       } else {
         setIsDeleting(false);
         setPhraseIndex((prev) => (prev + 1) % TYPEWRITER_PHRASES.length);
@@ -157,24 +91,6 @@ export function Login() {
 
     return () => clearTimeout(timer);
   }, [typewriterText, isDeleting, phraseIndex, prefersReducedMotion]);
-
-  // Feature carousel rotation timer
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveCardIndex((prev) => (prev + 1) % SYSTEM_CAPABILITIES.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Mouse move handler for delicate desktop parallax (clamped 2px - 12px)
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (typeof window === 'undefined' || window.innerWidth < 1024) return;
-    const { clientX, clientY } = e;
-    const { innerWidth, innerHeight } = window;
-    const normX = (clientX / innerWidth - 0.5) * 2; // -1 to 1
-    const normY = (clientY / innerHeight - 0.5) * 2; // -1 to 1
-    setMousePos({ x: normX, y: normY });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,45 +122,27 @@ export function Login() {
     <div
       dir="rtl"
       id="nmo-login-root"
-      onMouseMove={handleMouseMove}
       className="min-h-screen relative overflow-hidden flex flex-col justify-between bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-white"
     >
-      {/* Dynamic Background Mesh & Ambient Glow */}
+      {/* Ambient Dark Spatial Background */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         {/* Subtle Tech Grid Pattern */}
         <div
-          className="absolute inset-0 opacity-[0.035]"
+          className="absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage: `radial-gradient(circle at 1px 1px, #94a3b8 1px, transparent 0)`,
-            backgroundSize: '36px 36px',
-            transform: `translate3d(${mousePos.x * -4}px, ${mousePos.y * -4}px, 0)`
+            backgroundSize: '40px 40px',
           }}
         />
 
-        {/* Ambient Light Orbs with subtle parallax */}
-        <div
-          className="absolute -top-[15%] right-[-10%] w-[55vw] h-[55vw] max-w-[680px] max-h-[680px] rounded-full bg-gradient-to-br from-indigo-600/20 to-purple-600/10 blur-[130px] transition-transform duration-700 ease-out"
-          style={{
-            transform: `translate3d(${mousePos.x * 12}px, ${mousePos.y * 12}px, 0)`
-          }}
-        />
-        <div
-          className="absolute -bottom-[20%] left-[-10%] w-[60vw] h-[60vw] max-w-[720px] max-h-[720px] rounded-full bg-gradient-to-tr from-blue-700/15 via-indigo-600/10 to-transparent blur-[140px] transition-transform duration-700 ease-out"
-          style={{
-            transform: `translate3d(${mousePos.x * -10}px, ${mousePos.y * -10}px, 0)`
-          }}
-        />
-        <div
-          className="absolute top-[40%] left-[30%] w-[35vw] h-[35vw] max-w-[450px] max-h-[450px] rounded-full bg-emerald-500/5 blur-[120px] pointer-events-none"
-          style={{
-            transform: `translate3d(${mousePos.x * 6}px, ${mousePos.y * 6}px, 0)`
-          }}
-        />
+        {/* Atmospheric Deep Glow Spheres */}
+        <div className="absolute -top-[10%] right-[-5%] w-[50vw] h-[50vw] max-w-[620px] max-h-[620px] rounded-full bg-gradient-to-br from-indigo-700/15 via-purple-700/10 to-transparent blur-[140px] pointer-events-none" />
+        <div className="absolute -bottom-[15%] left-[-5%] w-[55vw] h-[55vw] max-w-[680px] max-h-[680px] rounded-full bg-gradient-to-tr from-blue-700/15 via-indigo-600/10 to-transparent blur-[150px] pointer-events-none" />
       </div>
 
-      {/* Main Container */}
+      {/* Main Content Area */}
       <div className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12 flex items-center">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-center">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
 
           {/* ============================================================ */}
           {/* القسم الأول: بطاقة تسجيل الدخول (Right/Primary Form in RTL) */}
@@ -252,13 +150,13 @@ export function Login() {
           <div className="lg:col-span-5 w-full max-w-md mx-auto order-1 lg:order-1">
             <div
               id="login-card-container"
-              className="relative bg-slate-900/75 backdrop-blur-2xl border border-slate-800/80 rounded-3xl p-6 sm:p-9 shadow-2xl shadow-black/50 transition-all duration-300 hover:border-slate-700/80"
+              className="relative bg-slate-900/80 backdrop-blur-2xl border border-slate-800/90 rounded-3xl p-6 sm:p-9 shadow-2xl shadow-black/60 transition-all duration-300 hover:border-slate-700/90"
               style={{
-                boxShadow: '0 20px 50px -10px rgba(0, 0, 0, 0.5), 0 0 30px 0 rgba(79, 70, 229, 0.08)'
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 35px 0 rgba(99, 102, 241, 0.08)'
               }}
             >
-              {/* Subtle top card glow line */}
-              <div className="absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+              {/* Top Accent Glow Line */}
+              <div className="absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
 
               {/* Header inside Login Card */}
               <div className="text-center sm:text-start mb-7">
@@ -271,7 +169,7 @@ export function Login() {
                     />
                   ) : (
                     <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-blue-700 p-0.5 flex items-center justify-center shadow-lg shadow-indigo-600/25 shrink-0">
-                      <div className="w-full h-full bg-slate-950/40 rounded-[14px] flex items-center justify-center">
+                      <div className="w-full h-full bg-slate-950/50 rounded-[14px] flex items-center justify-center">
                         <Layers className="w-6 h-6 text-indigo-300" />
                       </div>
                     </div>
@@ -365,7 +263,7 @@ export function Login() {
                       tabIndex={0}
                       onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-                      className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                      className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 hover:text-slate-200 transition-colors focus:outline-none cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
@@ -402,21 +300,21 @@ export function Login() {
                   <button
                     type="button"
                     onClick={() => handleQuickFill('admin@erp.com', 'admin')}
-                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center"
+                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center cursor-pointer"
                   >
                     مدير النظام
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickFill('rep@erp.com', 'rep')}
-                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center"
+                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center cursor-pointer"
                   >
                     مندوب مبيعات
                   </button>
                   <button
                     type="button"
                     onClick={() => handleQuickFill('acc@erp.com', 'acc')}
-                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center"
+                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center cursor-pointer"
                   >
                     محاسب مالي
                   </button>
@@ -432,101 +330,34 @@ export function Login() {
           </div>
 
           {/* ============================================================ */}
-          {/* القسم الثاني: القيمة التشغيلية للنظام (Left in RTL desktop) */}
+          {/* القسم الثاني: الفضاء البصري ثلاثي الأبعاد — منظومة موحدة      */}
           {/* ============================================================ */}
-          <div className="lg:col-span-7 flex flex-col justify-center space-y-6 lg:space-y-8 order-2 lg:order-2">
+          <div className="lg:col-span-7 flex flex-col justify-center order-2 lg:order-2">
 
-            {/* Main Headline & Typewriter */}
-            <div className="space-y-4 text-center lg:text-start">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-xs font-semibold text-indigo-300 shadow-sm">
-                <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>منصة إدارة العمليات والتوزيع المتكاملة</span>
-              </div>
-
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.2]">
-                إدارة تشغيلية أوضح، <br className="hidden sm:inline" />
+            {/* Clean Hero Title & Ambient Typewriter (Zero cards, zero pills) */}
+            <div className="mb-4 text-center lg:text-start space-y-3">
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.25]">
+                منظومة تشغيلية موحدة، <br className="hidden sm:inline" />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-blue-300 to-purple-300">
-                  من شاشة موحدة
+                  مترابطة في فضاء رقمي متكامل
                 </span>
               </h2>
 
-              {/* Typewriter Banner */}
-              <div className="h-16 flex items-center justify-center lg:justify-start">
-                <div
-                  id="typewriter-box"
-                  className="px-4 py-2.5 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex items-center gap-2 text-sm sm:text-base text-slate-300 font-medium shadow-inner min-h-[44px]"
-                >
+              {/* Typewriter Line */}
+              <div className="min-h-[32px] flex items-center justify-center lg:justify-start">
+                <div className="inline-flex items-center gap-2 text-sm sm:text-base text-slate-300 font-medium">
                   <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span className="text-white font-semibold">{typewriterText}</span>
+                  <span className="text-slate-200 font-semibold">{typewriterText}</span>
                   {!prefersReducedMotion && (
-                    <span className="inline-block w-2 h-4 bg-indigo-400 animate-pulse" />
+                    <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse" />
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Interactive Feature Cards Showcase (Operational modules) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {SYSTEM_CAPABILITIES.map((cap, idx) => {
-                const IconComponent = cap.icon;
-                const isActive = activeCardIndex === idx;
-
-                return (
-                  <div
-                    key={cap.id}
-                    onClick={() => setActiveCardIndex(idx)}
-                    className={`group relative p-4.5 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden ${
-                      isActive
-                        ? `${cap.bgColor} ${cap.borderColor} shadow-lg shadow-black/40 scale-[1.02]`
-                        : 'bg-slate-900/40 border-slate-800/70 hover:bg-slate-900/70 hover:border-slate-700/80'
-                    }`}
-                  >
-                    {/* Active Card Indicator bar */}
-                    {isActive && (
-                      <div className={`absolute top-0 right-0 left-0 h-1 bg-gradient-to-r ${cap.color}`} />
-                    )}
-
-                    <div className="flex items-start justify-between gap-3 mb-2.5">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-slate-950/60 border border-slate-800 ${cap.lightColor} group-hover:scale-105 transition-transform`}>
-                        <IconComponent className="w-5 h-5" />
-                      </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-950/60 border border-slate-800/80 text-slate-400">
-                        {cap.metric}
-                      </span>
-                    </div>
-
-                    <h3 className="text-base font-bold text-white group-hover:text-indigo-200 transition-colors mb-1">
-                      {cap.title}
-                    </h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      {cap.shortDesc}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Floating Live Telemetry Ribbon (Parallax effect) */}
-            <div
-              className="hidden lg:flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 backdrop-blur-md transition-transform duration-500 ease-out text-xs text-slate-300"
-              style={{
-                transform: `translate3d(${mousePos.x * 6}px, ${mousePos.y * 6}px, 0)`
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>العمولات والتحصيلات مربوطة بالعمليات الفعلية</span>
-              </div>
-              <div className="h-3 w-px bg-slate-800" />
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-blue-400" />
-                <span>سجلات الأسطول والوثائق محدثة آنياً</span>
-              </div>
-              <div className="h-3 w-px bg-slate-800" />
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-purple-400" />
-                <span>مساعد ريجين جاهز للاستعلامات</span>
-              </div>
+            {/* Pure 3D Spatial Composition (Visual story of connected ERP modules) */}
+            <div className="relative w-full">
+              <Spatial3DCanvas />
             </div>
 
           </div>

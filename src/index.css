@@ -33,3 +33,30 @@ html, body {
   max-width: 100vw;
   overflow-x: hidden;
 }
+
+@keyframes spatial-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1.5deg);
+  }
+}
+
+@keyframes data-dash {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.animate-floating {
+  animation: spatial-float ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-floating {
+    animation: none !important;
+  }
+}
+
