@@ -1,9 +1,17 @@
 import { ApiResponse } from "@/types/responses";
 
-// Try to get URL from import.meta.env, fallback to the known URL if missing during dev
-const GAS_URL =
-  (typeof process !== 'undefined' ? process.env.VITE_GAS_WEBAPP_URL : ((import.meta as any).env && (import.meta as any).env.VITE_GAS_WEBAPP_URL)) ||
-  "https://script.google.com/macros/s/AKfycbzEsIMtuEO333KPSe607kKJ7OuHjzuJ42-0vKvTOJQOHKUGkFI3fAomDx7_PY-y1WVp/exec";
+export function getGasUrl(): string {
+  if (typeof window !== "undefined") {
+    const custom = localStorage.getItem("CUSTOM_GAS_WEBAPP_URL");
+    if (custom && custom.trim()) return custom.trim();
+  }
+  const envUrl =
+    typeof process !== "undefined"
+      ? process.env.VITE_GAS_WEBAPP_URL
+      : (import.meta as any).env && (import.meta as any).env.VITE_GAS_WEBAPP_URL;
+  if (envUrl && envUrl.trim()) return envUrl.trim();
+  return "https://script.google.com/macros/s/AKfycbzEsIMtuEO333KPSe607kKJ7OuHjzuJ42-0vKvTOJQOHKUGkFI3fAomDx7_PY-y1WVp/exec";
+}
 
 export interface ApiRequestOptions {
   timeoutMs?: number;
@@ -18,16 +26,11 @@ export class ApiClient {
   ): Promise<ApiResponse<T>> {
     const startTime = performance.now();
     const companyId = payload?.CompanyID || payload?.companyId || "COM-0001";
-    const timeoutMs = options.timeoutMs || 25000; // 25 seconds default timeout for GAS cold starts
+    const timeoutMs = options.timeoutMs || 20000;
+    const currentUrl = getGasUrl();
 
-    console.groupCollapsed(`🌐 [API Request] ${action} (${companyId})`);
-    console.log(`Payload:`, payload);
-    console.log(`Target URL:`, GAS_URL);
-
-    if (!GAS_URL) {
+    if (!currentUrl) {
       const errorMsg = "Google Apps Script Web App URL is not configured.";
-      console.error(`❌ [API Error] ${action}: ${errorMsg}`);
-      console.groupEnd();
       return {
         success: false,
         data: null as any,
@@ -49,20 +52,18 @@ export class ApiClient {
     let rawText = "";
 
     try {
-      response = await fetch(GAS_URL, {
+      response = await fetch(currentUrl, {
         method: "POST",
         headers: {
           "Content-Type": "text/plain;charset=utf-8",
         },
         body: JSON.stringify({ action, payload }),
         signal: controller.signal,
-        redirect: "follow", // Follow 302/301 redirects transparently
+        redirect: "follow",
       });
 
       clearTimeout(timeoutId);
       const durationMs = Math.round(performance.now() - startTime);
-
-      console.log(`HTTP Status: ${response.status} ${response.statusText} (took ${durationMs}ms)`);
 
       rawText = await response.text();
 
@@ -70,24 +71,18 @@ export class ApiClient {
       try {
         parsedJson = JSON.parse(rawText);
       } catch (parseError: any) {
-        console.error(`❌ [JSON Parse Error] ${action} (Status: ${response.status}, took ${durationMs}ms):`, parseError);
-        console.warn(`Raw Response Body preview:`, rawText ? rawText.substring(0, 300) : '<empty>');
-        console.groupEnd();
-
+        console.warn(`[API Notice] ${action} (${durationMs}ms): Non-JSON response received.`);
         return {
           success: false,
           data: null as any,
           message: `فشل معالجة استجابة الخادم لطلب (${action}).`,
           error: {
             code: "JSON_PARSE_ERROR",
-            details: `HTTP ${response.status}: Failed to parse JSON response. Response starts with: ${rawText ? rawText.substring(0, 100) : 'empty'}`,
+            details: `HTTP ${response.status}: Response is not valid JSON.`,
           },
           timestamp: new Date().toISOString(),
         };
       }
-
-      console.log(`Parsed Result:`, parsedJson);
-      console.groupEnd();
 
       if (!response.ok && !parsedJson) {
         return {
@@ -111,10 +106,9 @@ export class ApiClient {
       const errorCode = isAbort ? "TIMEOUT_ERROR" : "NETWORK_ERROR";
       const errorMessage = isAbort
         ? `انتهت مهلة انتظار استجابة الخادم (${Math.round(timeoutMs / 1000)} ثانية) لطلب ${action}.`
-        : error.message || "تعذر الاتصال بالخادم.";
+        : error?.message || "تعذر الاتصال بالخادم.";
 
-      console.error(`❌ [API Request Failed] ${action} (Duration: ${durationMs}ms, Code: ${errorCode}):`, error);
-      console.groupEnd();
+      console.warn(`[API Notice] ${action} (${durationMs}ms, ${errorCode}):`, errorMessage);
 
       return {
         success: false,
@@ -122,7 +116,7 @@ export class ApiClient {
         message: errorMessage,
         error: {
           code: errorCode,
-          details: String(error.message || error),
+          details: String(error?.message || error),
         },
         timestamp: new Date().toISOString(),
       };
@@ -145,4 +139,5 @@ export class ApiClient {
     return this.request<T>(action, data, options);
   }
 }
+
 

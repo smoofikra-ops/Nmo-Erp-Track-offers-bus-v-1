@@ -139,6 +139,12 @@ export interface Product extends BaseEntity {
   Category?: string;
   UnitID?: string;
   UnitType?: string;
+  InventoryUnitName?: string;
+  OfferUnitName?: string;
+  OfferUnitsPerInventoryItem?: number;
+  SellingPrice?: number;
+  MarketPricePerOfferUnitIncVat?: number;
+  SuggestedPricePerOfferUnitIncVat?: number;
   DefaultCommission: number;
   Status: ProductStatus;
   Notes?: string;

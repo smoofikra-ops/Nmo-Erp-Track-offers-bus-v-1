@@ -43,6 +43,7 @@ export type DiscountItem = {
 export interface AppliedDiscount {
   id: string;
   name: string;
+  description?: string;
   amount: number;
 }
 
@@ -95,6 +96,7 @@ export interface CommissionRecord {
     name: string;
   };
   lastModifiedAt?: string;
+  IsDeleted?: boolean;
 }
 
 export interface CommissionRevision {
