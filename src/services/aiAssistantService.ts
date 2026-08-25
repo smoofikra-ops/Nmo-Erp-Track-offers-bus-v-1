@@ -650,12 +650,15 @@ class AIAssistantService {
   // --- HANDLER: Commissions & Orders ---
   private async handleCommissionsIntent(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
     try {
-      const [empRes, commRes] = await Promise.all([
+      const results = await Promise.allSettled([
         employeeService.getEmployees(companyId),
         commissionService.getCommissionRecords(companyId)
       ]);
 
-      if (commRes.error) {
+      const empRes = results[0].status === 'fulfilled' ? results[0].value : { success: false, data: [], error: { code: 'NETWORK_ERROR', details: 'Failed to fetch employees' } };
+      const commRes = results[1].status === 'fulfilled' ? results[1].value : { success: false, data: [], error: { code: 'NETWORK_ERROR', details: 'Failed to fetch commissions' } };
+
+      if (commRes.error && !commRes.data?.length) {
         return {
           type: 'TEXT',
           module: 'COMMISSIONS',
@@ -953,12 +956,15 @@ class AIAssistantService {
   // --- HANDLER: Employees ---
   private async handleEmployeesIntent(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
     try {
-      const [empRes, vehRes] = await Promise.all([
+      const results = await Promise.allSettled([
         employeeService.getEmployees(companyId),
         fleetService.getVehicles(companyId)
       ]);
 
-      if (empRes.error) {
+      const empRes = results[0].status === 'fulfilled' ? results[0].value : { success: false, data: [], error: { code: 'NETWORK_ERROR', details: 'Failed to fetch employees' } };
+      const vehRes = results[1].status === 'fulfilled' ? results[1].value : { success: false, data: [] };
+
+      if (empRes.error && !empRes.data?.length) {
         return {
           type: 'TEXT',
           module: 'EMPLOYEES',
@@ -1103,12 +1109,17 @@ class AIAssistantService {
 
   // --- HANDLER: Cross-Module Overview ---
   private async handleCrossModuleOverview(prompt: string, context?: any, companyId: string = DEFAULT_COMPANY_ID): Promise<AIQueryResult> {
-    const [empRes, vehRes, prodRes, quoteRes] = await Promise.all([
+    const results = await Promise.allSettled([
       employeeService.getEmployees(companyId),
       fleetService.getVehicles(companyId),
       productService.getProducts(companyId),
       quoteService.getQuotes(companyId)
     ]);
+
+    const empRes = results[0].status === 'fulfilled' ? results[0].value : { success: false, data: [] };
+    const vehRes = results[1].status === 'fulfilled' ? results[1].value : { success: false, data: [] };
+    const prodRes = results[2].status === 'fulfilled' ? results[2].value : { success: false, data: [] };
+    const quoteRes = results[3].status === 'fulfilled' ? results[3].value : { success: false, data: [] };
 
     const emps = empRes.data || [];
     const vehs = (vehRes.data || []).filter(v => !v.IsDeleted);

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { commissionService } from '@/services/commissionService';
 import { CommissionRecord, CommissionTypeCategory } from '@/types/commissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, ChevronUp, Package, Lock, Truck, Gauge, Wrench, ArrowUpRight } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, ChevronUp, Package, Lock, Truck, Gauge, Wrench, ArrowUpRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { fleetService } from '@/services/fleetService';
 import { format, startOfMonth, endOfDay, subDays, startOfYear, subMonths, endOfMonth, startOfDay } from 'date-fns';
@@ -35,10 +35,12 @@ export function Dashboard() {
     }
   };
 
-  const { data: recordsRes, isLoading } = useQuery({
+  const { data: recordsRes, isLoading, refetch: refetchRecords, isFetching } = useQuery({
     queryKey: ['commissionRecords', companyId],
     queryFn: () => commissionService.getCommissionRecords(companyId),
     enabled: Boolean(companyId),
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const { data: fleetKpisRes } = useQuery({
@@ -214,7 +216,7 @@ export function Dashboard() {
 
   if (recordsRes && recordsRes.success === false) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6" dir="rtl">
         <div className="h-24 w-24 bg-red-50 rounded-full flex items-center justify-center">
           <AlertTriangle className="h-10 w-10 text-red-400" />
         </div>
@@ -223,7 +225,20 @@ export function Dashboard() {
           <p className="text-slate-500">
             {recordsRes.message || 'يرجى التأكد من أن رابط Google Apps Script صحيح وأنه يعمل بشكل سليم.'}
           </p>
+          {recordsRes.error?.details && (
+            <p className="text-xs font-mono text-slate-400 bg-slate-100 p-2 rounded max-w-sm mx-auto overflow-hidden text-ellipsis">
+              {recordsRes.error.details}
+            </p>
+          )}
         </div>
+        <button
+          onClick={() => refetchRecords()}
+          disabled={isFetching}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-medium rounded-lg shadow-sm transition"
+        >
+          <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+          <span>{isFetching ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'}</span>
+        </button>
       </div>
     );
   }

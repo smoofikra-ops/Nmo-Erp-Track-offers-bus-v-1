@@ -29,11 +29,15 @@ export const NotificationCenter: React.FC = () => {
 
   const loadNotifications = async () => {
     try {
-      const [vehRes, commRes, prodRes] = await Promise.all([
+      const results = await Promise.allSettled([
         fleetService.getVehicles(DEFAULT_COMPANY_ID),
         commissionService.getCommissionRecords(DEFAULT_COMPANY_ID),
         productService.getProducts(DEFAULT_COMPANY_ID)
       ]);
+
+      const vehRes = results[0].status === 'fulfilled' ? results[0].value : { success: false, data: [] };
+      const commRes = results[1].status === 'fulfilled' ? results[1].value : { success: false, data: [] };
+      const prodRes = results[2].status === 'fulfilled' ? results[2].value : { success: false, data: [] };
 
       const notifs: ERPNotification[] = [];
       const now = new Date();

@@ -81,7 +81,8 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
         }
       }
 
-      const [fRes, mRes, iRes, cRes, aRes, dRes] = await Promise.all([
+      // Use Promise.allSettled to ensure that failure in one log type does not block others
+      const results = await Promise.allSettled([
         fleetService.getFuelLogs(vehicleId),
         fleetService.getMaintenanceLogs(vehicleId),
         fleetService.getInsuranceLogs(vehicleId),
@@ -89,6 +90,10 @@ export function VehicleDetails({ vehicleId, onBack, onVehicleUpdated }: VehicleD
         fleetService.getAccidentLogs(vehicleId),
         fleetService.getDocuments(vehicleId),
       ]);
+
+      const [fRes, mRes, iRes, cRes, aRes, dRes] = results.map(r => 
+        r.status === 'fulfilled' ? r.value : { success: false, data: [] }
+      );
 
       if (fRes.success && fRes.data) setFuelLogs(fRes.data);
       if (mRes.success && mRes.data) setMaintLogs(mRes.data);
