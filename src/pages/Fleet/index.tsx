@@ -91,16 +91,16 @@ export default function FleetPage() {
   const filteredVehicles = vehicles.filter(v => {
     const term = searchTerm.toLowerCase().trim();
     const matchesSearch = !term || (
-      v.Plate_Number.toLowerCase().includes(term) ||
-      v.Brand.toLowerCase().includes(term) ||
-      v.Model.toLowerCase().includes(term) ||
-      (v.Assigned_User_Name && v.Assigned_User_Name.toLowerCase().includes(term)) ||
-      (v.Primary_Driver_Name && v.Primary_Driver_Name.toLowerCase().includes(term)) ||
-      (v.Owner_Name && v.Owner_Name.toLowerCase().includes(term)) ||
-      (v.VIN_Chassis_Number && v.VIN_Chassis_Number.toLowerCase().includes(term)) ||
-      (v.VIN && v.VIN.toLowerCase().includes(term)) ||
-      (v.Serial_Number && v.Serial_Number.toLowerCase().includes(term)) ||
-      (v.Assigned_Employee_ID && v.Assigned_Employee_ID.toLowerCase().includes(term))
+      String(v.Plate_Number || '').toLowerCase().includes(term) ||
+      String(v.Brand || '').toLowerCase().includes(term) ||
+      String(v.Model || '').toLowerCase().includes(term) ||
+      (v.Assigned_User_Name && String(v.Assigned_User_Name).toLowerCase().includes(term)) ||
+      (v.Primary_Driver_Name && String(v.Primary_Driver_Name).toLowerCase().includes(term)) ||
+      (v.Owner_Name && String(v.Owner_Name).toLowerCase().includes(term)) ||
+      (v.VIN_Chassis_Number && String(v.VIN_Chassis_Number).toLowerCase().includes(term)) ||
+      (v.VIN && String(v.VIN).toLowerCase().includes(term)) ||
+      (v.Serial_Number && String(v.Serial_Number).toLowerCase().includes(term)) ||
+      (v.Assigned_Employee_ID && String(v.Assigned_Employee_ID).toLowerCase().includes(term))
     );
 
     const matchesStatus = statusFilter === 'ALL' || v.Operational_Status === statusFilter;

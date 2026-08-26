@@ -1,3 +1,5 @@
+import { Vehicle } from '@/types/fleet';
+
 export interface VehicleBrandModel {
   brand: string;
   brandEn?: string;
@@ -186,6 +188,31 @@ export interface ExpiryAnalysis {
   bgClass: string;
 }
 
+/**
+ * Safely trims any value into a clean string without throwing if the value is a number, null, or undefined.
+ */
+export function safeTrim(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val).trim();
+  try {
+    const s = String(val);
+    return s === '[object Object]' ? '' : s.trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Safely parses any number, preserving 0 or returning fallback if invalid.
+ */
+export function safeNumber(val: unknown, fallback: number = 0): number {
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+  if (val === null || val === undefined || val === '') return fallback;
+  const parsed = Number(val);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
 export function parseRawDateSafely(val: unknown): Date | null {
   if (val === null || val === undefined || val === '') {
     return null;
@@ -344,3 +371,62 @@ export function calculateExpiryStatus(rawDate?: unknown): ExpiryAnalysis {
     bgClass: 'bg-emerald-500',
   };
 }
+
+/**
+ * Type-aware normalization of vehicle payload before validation, storage, or transmission.
+ * Handles mixed types (strings, numbers, Dates, booleans, null, undefined) cleanly.
+ */
+export function normalizeVehiclePayload(payload: Partial<Vehicle>): Partial<Vehicle> {
+  const result: Partial<Vehicle> = { ...payload };
+
+  // Strings
+  if ('Plate_Number' in payload) result.Plate_Number = safeTrim(payload.Plate_Number);
+  if ('Brand' in payload) result.Brand = safeTrim(payload.Brand);
+  if ('Make' in payload) result.Make = safeTrim(payload.Make || payload.Brand);
+  if ('Model' in payload) result.Model = safeTrim(payload.Model);
+  if ('Color' in payload) result.Color = safeTrim(payload.Color);
+  if ('Registration_Type' in payload) result.Registration_Type = safeTrim(payload.Registration_Type);
+  if ('Owner_Name' in payload) result.Owner_Name = safeTrim(payload.Owner_Name);
+  if ('Owner_ID_Number' in payload) result.Owner_ID_Number = safeTrim(payload.Owner_ID_Number);
+  if ('Assigned_User_Name' in payload) result.Assigned_User_Name = safeTrim(payload.Assigned_User_Name);
+  if ('User_ID_Number' in payload) result.User_ID_Number = safeTrim(payload.User_ID_Number);
+  if ('Assigned_Employee_ID' in payload) result.Assigned_Employee_ID = safeTrim(payload.Assigned_Employee_ID);
+  if ('Primary_Driver_ID' in payload) result.Primary_Driver_ID = safeTrim(payload.Primary_Driver_ID);
+  if ('Primary_Driver_Name' in payload) result.Primary_Driver_Name = safeTrim(payload.Primary_Driver_Name);
+  if ('VIN_Chassis_Number' in payload) result.VIN_Chassis_Number = safeTrim(payload.VIN_Chassis_Number);
+  if ('VIN' in payload) result.VIN = safeTrim(payload.VIN || payload.VIN_Chassis_Number);
+  if ('Chassis_Number' in payload) result.Chassis_Number = safeTrim(payload.Chassis_Number || payload.VIN_Chassis_Number);
+  if ('Serial_Number' in payload) result.Serial_Number = safeTrim(payload.Serial_Number);
+  if ('Registration_Number' in payload) result.Registration_Number = safeTrim(payload.Registration_Number || payload.Serial_Number);
+  if ('Notes' in payload) result.Notes = safeTrim(payload.Notes);
+
+  // Numbers
+  if ('Manufacturing_Year' in payload || 'Year' in payload) {
+    const yr = safeNumber(payload.Manufacturing_Year || payload.Year, new Date().getFullYear());
+    result.Manufacturing_Year = yr;
+    result.Year = yr;
+  }
+  if ('Tank_Capacity' in payload) result.Tank_Capacity = safeNumber(payload.Tank_Capacity, 50);
+  if ('Load_Capacity' in payload) result.Load_Capacity = safeNumber(payload.Load_Capacity, 0);
+  if ('Vehicle_Weight' in payload) result.Vehicle_Weight = safeNumber(payload.Vehicle_Weight, 0);
+  if ('Current_Odometer' in payload) result.Current_Odometer = safeNumber(payload.Current_Odometer, 0);
+  if ('Initial_Odometer' in payload) result.Initial_Odometer = safeNumber(payload.Initial_Odometer, 0);
+
+  // Dates
+  if ('Registration_Expiry' in payload || 'License_Expiry' in payload) {
+    const d = formatToIsoDateString(payload.Registration_Expiry || payload.License_Expiry);
+    result.Registration_Expiry = d;
+    result.License_Expiry = d;
+  }
+  if ('Insurance_Expiry' in payload) {
+    result.Insurance_Expiry = formatToIsoDateString(payload.Insurance_Expiry);
+  }
+  if ('Periodic_Inspection_Expiry' in payload || 'Inspection_Expiry' in payload) {
+    const d = formatToIsoDateString(payload.Periodic_Inspection_Expiry || payload.Inspection_Expiry);
+    result.Periodic_Inspection_Expiry = d;
+    result.Inspection_Expiry = d;
+  }
+
+  return result;
+}
+

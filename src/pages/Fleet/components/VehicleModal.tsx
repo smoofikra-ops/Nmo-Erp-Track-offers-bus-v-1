@@ -7,7 +7,11 @@ import {
   DEFAULT_VEHICLE_BRANDS, 
   DEFAULT_VEHICLE_COLORS, 
   DEFAULT_REGISTRATION_TYPES, 
-  calculateExpiryStatus 
+  calculateExpiryStatus,
+  safeTrim,
+  safeNumber,
+  formatToIsoDateString,
+  normalizeVehiclePayload
 } from '@/data/fleetMasterData';
 import { 
   Truck, Car, UserCheck, ShieldAlert, X, Sparkles, 
@@ -29,46 +33,47 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
 
   // 1. Ownership & Usage (بيانات الملكية والاستخدام)
-  const [ownerName, setOwnerName] = useState(vehicle?.Owner_Name || 'شركة المقاولات الحديثة');
-  const [ownerIdNumber, setOwnerIdNumber] = useState(vehicle?.Owner_ID_Number || '7001234567');
-  const [assignedUserName, setAssignedUserName] = useState(vehicle?.Assigned_User_Name || vehicle?.Primary_Driver_Name || '');
-  const [userIdNumber, setUserIdNumber] = useState(vehicle?.User_ID_Number || '');
-  const [assignedEmployeeId, setAssignedEmployeeId] = useState(vehicle?.Assigned_Employee_ID || vehicle?.Primary_Driver_ID || '');
+  const [ownerName, setOwnerName] = useState(safeTrim(vehicle?.Owner_Name) || 'شركة المقاولات الحديثة');
+  const [ownerIdNumber, setOwnerIdNumber] = useState(safeTrim(vehicle?.Owner_ID_Number) || '7001234567');
+  const [assignedUserName, setAssignedUserName] = useState(safeTrim(vehicle?.Assigned_User_Name || vehicle?.Primary_Driver_Name));
+  const [userIdNumber, setUserIdNumber] = useState(safeTrim(vehicle?.User_ID_Number));
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState(safeTrim(vehicle?.Assigned_Employee_ID || vehicle?.Primary_Driver_ID));
 
   // 2. Vehicle Identification (بيانات تعريف المركبة)
-  const [vinChassisNumber, setVinChassisNumber] = useState(vehicle?.VIN_Chassis_Number || vehicle?.VIN || '');
-  const [serialNumber, setSerialNumber] = useState(vehicle?.Serial_Number || vehicle?.Registration_Number || '');
-  const [plateNumber, setPlateNumber] = useState(vehicle?.Plate_Number || '');
+  const [vinChassisNumber, setVinChassisNumber] = useState(safeTrim(vehicle?.VIN_Chassis_Number || vehicle?.VIN));
+  const [serialNumber, setSerialNumber] = useState(safeTrim(vehicle?.Serial_Number || vehicle?.Registration_Number));
+  const [plateNumber, setPlateNumber] = useState(safeTrim(vehicle?.Plate_Number));
 
   // 3. Vehicle Specifications (مواصفات المركبة)
-  const [brand, setBrand] = useState(vehicle?.Brand || 'تويوتا');
-  const [model, setModel] = useState(vehicle?.Model || '');
+  const [brand, setBrand] = useState(safeTrim(vehicle?.Brand) || 'تويوتا');
+  const [model, setModel] = useState(safeTrim(vehicle?.Model));
   const [customModel, setCustomModel] = useState('');
   const [isCustomModelActive, setIsCustomModelActive] = useState(false);
-  const [manufacturingYear, setManufacturingYear] = useState<number>(vehicle?.Manufacturing_Year || vehicle?.Year || new Date().getFullYear());
-  const [color, setColor] = useState(vehicle?.Color || 'أبيض');
-  const [registrationType, setRegistrationType] = useState(vehicle?.Registration_Type || 'خصوصي');
+  const [manufacturingYear, setManufacturingYear] = useState<number>(safeNumber(vehicle?.Manufacturing_Year || vehicle?.Year, new Date().getFullYear()));
+  const [color, setColor] = useState(safeTrim(vehicle?.Color) || 'أبيض');
+  const [registrationType, setRegistrationType] = useState(safeTrim(vehicle?.Registration_Type) || 'خصوصي');
   const [fuelType, setFuelType] = useState(vehicle?.Fuel_Type || 'GASOLINE_91');
-  const [tankCapacity, setTankCapacity] = useState<number | ''>(vehicle?.Tank_Capacity ?? 50);
-  const [loadCapacity, setLoadCapacity] = useState<number | ''>(vehicle?.Load_Capacity ?? '');
-  const [vehicleWeight, setVehicleWeight] = useState<number | ''>(vehicle?.Vehicle_Weight ?? '');
+  const [tankCapacity, setTankCapacity] = useState<number | ''>(vehicle?.Tank_Capacity !== undefined && vehicle?.Tank_Capacity !== null ? safeNumber(vehicle.Tank_Capacity, 50) : 50);
+  const [loadCapacity, setLoadCapacity] = useState<number | ''>(vehicle?.Load_Capacity !== undefined && vehicle?.Load_Capacity !== null ? safeNumber(vehicle.Load_Capacity, 0) : '');
+  const [vehicleWeight, setVehicleWeight] = useState<number | ''>(vehicle?.Vehicle_Weight !== undefined && vehicle?.Vehicle_Weight !== null ? safeNumber(vehicle.Vehicle_Weight, 0) : '');
 
   // 4. Document Expiries (تواريخ الوثائق)
-  const [registrationExpiry, setRegistrationExpiry] = useState(vehicle?.Registration_Expiry || vehicle?.License_Expiry || '');
-  const [insuranceExpiry, setInsuranceExpiry] = useState(vehicle?.Insurance_Expiry || '');
-  const [periodicInspectionExpiry, setPeriodicInspectionExpiry] = useState(vehicle?.Periodic_Inspection_Expiry || vehicle?.Inspection_Expiry || '');
+  const [registrationExpiry, setRegistrationExpiry] = useState(formatToIsoDateString(vehicle?.Registration_Expiry || vehicle?.License_Expiry));
+  const [insuranceExpiry, setInsuranceExpiry] = useState(formatToIsoDateString(vehicle?.Insurance_Expiry));
+  const [periodicInspectionExpiry, setPeriodicInspectionExpiry] = useState(formatToIsoDateString(vehicle?.Periodic_Inspection_Expiry || vehicle?.Inspection_Expiry));
 
   // 5. Operational Status (البيانات التشغيلية)
   const [status, setStatus] = useState<OperationalStatus>(vehicle?.Operational_Status || 'ACTIVE');
-  const [currentOdometer, setCurrentOdometer] = useState<number | ''>(vehicle?.Current_Odometer ?? 0);
-  const [notes, setNotes] = useState(vehicle?.Notes || '');
+  const [currentOdometer, setCurrentOdometer] = useState<number | ''>(vehicle?.Current_Odometer !== undefined && vehicle?.Current_Odometer !== null ? safeNumber(vehicle.Current_Odometer, 0) : 0);
+  const [notes, setNotes] = useState(safeTrim(vehicle?.Notes));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Available models based on selected brand
   const currentBrandObj = useMemo(() => {
-    return DEFAULT_VEHICLE_BRANDS.find(b => b.brand.toLowerCase() === brand.toLowerCase() || (b.brandEn && b.brandEn.toLowerCase() === brand.toLowerCase()));
+    const bTrim = safeTrim(brand).toLowerCase();
+    return DEFAULT_VEHICLE_BRANDS.find(b => b.brand.toLowerCase() === bTrim || (b.brandEn && b.brandEn.toLowerCase() === bTrim));
   }, [brand]);
 
   const availableModels = useMemo(() => {
@@ -79,20 +84,20 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
     if (isOpen) {
       loadEmployees();
       if (vehicle) {
-        setOwnerName(vehicle.Owner_Name || 'شركة المقاولات الحديثة');
-        setOwnerIdNumber(vehicle.Owner_ID_Number || '7001234567');
-        setAssignedUserName(vehicle.Assigned_User_Name || vehicle.Primary_Driver_Name || '');
-        setUserIdNumber(vehicle.User_ID_Number || '');
-        setAssignedEmployeeId(vehicle.Assigned_Employee_ID || vehicle.Primary_Driver_ID || '');
+        setOwnerName(safeTrim(vehicle.Owner_Name) || 'شركة المقاولات الحديثة');
+        setOwnerIdNumber(safeTrim(vehicle.Owner_ID_Number) || '7001234567');
+        setAssignedUserName(safeTrim(vehicle.Assigned_User_Name || vehicle.Primary_Driver_Name));
+        setUserIdNumber(safeTrim(vehicle.User_ID_Number));
+        setAssignedEmployeeId(safeTrim(vehicle.Assigned_Employee_ID || vehicle.Primary_Driver_ID));
 
-        setVinChassisNumber(vehicle.VIN_Chassis_Number || vehicle.VIN || '');
-        setSerialNumber(vehicle.Serial_Number || vehicle.Registration_Number || '');
-        setPlateNumber(vehicle.Plate_Number || '');
+        setVinChassisNumber(safeTrim(vehicle.VIN_Chassis_Number || vehicle.VIN));
+        setSerialNumber(safeTrim(vehicle.Serial_Number || vehicle.Registration_Number));
+        setPlateNumber(safeTrim(vehicle.Plate_Number));
 
-        const vBrand = vehicle.Brand || 'تويوتا';
+        const vBrand = safeTrim(vehicle.Brand) || 'تويوتا';
         setBrand(vBrand);
 
-        const vModel = vehicle.Model || '';
+        const vModel = safeTrim(vehicle.Model);
         const bObj = DEFAULT_VEHICLE_BRANDS.find(b => b.brand === vBrand || b.brandEn === vBrand);
         if (bObj && bObj.models.includes(vModel)) {
           setModel(vModel);
@@ -107,21 +112,21 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
           setIsCustomModelActive(false);
         }
 
-        setManufacturingYear(vehicle.Manufacturing_Year || vehicle.Year || new Date().getFullYear());
-        setColor(vehicle.Color || 'أبيض');
-        setRegistrationType(vehicle.Registration_Type || 'خصوصي');
+        setManufacturingYear(safeNumber(vehicle.Manufacturing_Year || vehicle.Year, new Date().getFullYear()));
+        setColor(safeTrim(vehicle.Color) || 'أبيض');
+        setRegistrationType(safeTrim(vehicle.Registration_Type) || 'خصوصي');
         setFuelType(vehicle.Fuel_Type || 'GASOLINE_91');
-        setTankCapacity(vehicle.Tank_Capacity ?? 50);
-        setLoadCapacity(vehicle.Load_Capacity ?? '');
-        setVehicleWeight(vehicle.Vehicle_Weight ?? '');
+        setTankCapacity(vehicle.Tank_Capacity !== undefined && vehicle.Tank_Capacity !== null ? safeNumber(vehicle.Tank_Capacity, 50) : 50);
+        setLoadCapacity(vehicle.Load_Capacity !== undefined && vehicle.Load_Capacity !== null ? safeNumber(vehicle.Load_Capacity, 0) : '');
+        setVehicleWeight(vehicle.Vehicle_Weight !== undefined && vehicle.Vehicle_Weight !== null ? safeNumber(vehicle.Vehicle_Weight, 0) : '');
 
-        setRegistrationExpiry(vehicle.Registration_Expiry || vehicle.License_Expiry || '');
-        setInsuranceExpiry(vehicle.Insurance_Expiry || '');
-        setPeriodicInspectionExpiry(vehicle.Periodic_Inspection_Expiry || vehicle.Inspection_Expiry || '');
+        setRegistrationExpiry(formatToIsoDateString(vehicle.Registration_Expiry || vehicle.License_Expiry));
+        setInsuranceExpiry(formatToIsoDateString(vehicle.Insurance_Expiry));
+        setPeriodicInspectionExpiry(formatToIsoDateString(vehicle.Periodic_Inspection_Expiry || vehicle.Inspection_Expiry));
 
         setStatus(vehicle.Operational_Status || 'ACTIVE');
-        setCurrentOdometer(vehicle.Current_Odometer ?? 0);
-        setNotes(vehicle.Notes || '');
+        setCurrentOdometer(vehicle.Current_Odometer !== undefined && vehicle.Current_Odometer !== null ? safeNumber(vehicle.Current_Odometer, 0) : 0);
+        setNotes(safeTrim(vehicle.Notes));
       } else {
         setOwnerName('شركة المقاولات الحديثة');
         setOwnerIdNumber('7001234567');
@@ -214,7 +219,7 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
 
   if (!isOpen) return null;
 
-  const resolvedModel = isCustomModelActive ? customModel.trim() : model.trim();
+  const resolvedModel = isCustomModelActive ? safeTrim(customModel) : safeTrim(model);
 
   const regExpiryStatus = calculateExpiryStatus(registrationExpiry);
   const insExpiryStatus = calculateExpiryStatus(insuranceExpiry);
@@ -222,11 +227,13 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plateNumber.trim()) {
+    const cleanPlate = safeTrim(plateNumber);
+    if (!cleanPlate) {
       setErrorMsg('يرجى إدخال رقم اللوحة');
       return;
     }
-    if (!brand.trim() || !resolvedModel) {
+    const cleanBrand = safeTrim(brand);
+    if (!cleanBrand || !resolvedModel) {
       setErrorMsg('يرجى اختيار الماركة والطراز بشكل صحيح');
       return;
     }
@@ -238,50 +245,52 @@ export function VehicleModal({ isOpen, onClose, vehicle, companyId = 'COM-0001',
       const matchedEmp = employees.find(e => e.EmployeeID === assignedEmployeeId || e.EmployeeCode === assignedEmployeeId);
       const empName = matchedEmp ? (matchedEmp.ArabicName || matchedEmp.EnglishName) : assignedUserName;
 
-      const payload: Partial<Vehicle> = {
+      const rawPayload: Partial<Vehicle> = {
         // Ownership & Usage
-        Owner_Name: ownerName.trim(),
-        Owner_ID_Number: ownerIdNumber.trim(),
-        Assigned_User_Name: assignedUserName.trim() || empName,
-        User_ID_Number: userIdNumber.trim() || matchedEmp?.NationalID || '',
-        Assigned_Employee_ID: assignedEmployeeId || undefined,
+        Owner_Name: safeTrim(ownerName),
+        Owner_ID_Number: safeTrim(ownerIdNumber),
+        Assigned_User_Name: safeTrim(assignedUserName) || empName,
+        User_ID_Number: safeTrim(userIdNumber) || matchedEmp?.NationalID || '',
+        Assigned_Employee_ID: safeTrim(assignedEmployeeId) || undefined,
 
         // Identification & Specs
-        VIN_Chassis_Number: vinChassisNumber.trim(),
-        VIN: vinChassisNumber.trim(),
-        Chassis_Number: vinChassisNumber.trim(),
-        Serial_Number: serialNumber.trim(),
-        Registration_Number: serialNumber.trim(),
-        Plate_Number: plateNumber.trim(),
-        Brand: brand.trim(),
-        Make: brand.trim(),
+        VIN_Chassis_Number: safeTrim(vinChassisNumber),
+        VIN: safeTrim(vinChassisNumber),
+        Chassis_Number: safeTrim(vinChassisNumber),
+        Serial_Number: safeTrim(serialNumber),
+        Registration_Number: safeTrim(serialNumber),
+        Plate_Number: cleanPlate,
+        Brand: cleanBrand,
+        Make: cleanBrand,
         Model: resolvedModel,
-        Manufacturing_Year: Number(manufacturingYear) || new Date().getFullYear(),
-        Year: Number(manufacturingYear) || new Date().getFullYear(),
-        Color: color.trim(),
-        Registration_Type: registrationType.trim(),
+        Manufacturing_Year: safeNumber(manufacturingYear, new Date().getFullYear()),
+        Year: safeNumber(manufacturingYear, new Date().getFullYear()),
+        Color: safeTrim(color),
+        Registration_Type: safeTrim(registrationType),
         Fuel_Type: fuelType as any,
         Tank_Capacity: typeof tankCapacity === 'number' ? tankCapacity : 50,
         Load_Capacity: typeof loadCapacity === 'number' ? loadCapacity : 0,
         Vehicle_Weight: typeof vehicleWeight === 'number' ? vehicleWeight : 0,
 
         // Expiries
-        Registration_Expiry: registrationExpiry || undefined,
-        License_Expiry: registrationExpiry || undefined,
-        Insurance_Expiry: insuranceExpiry || undefined,
-        Periodic_Inspection_Expiry: periodicInspectionExpiry || undefined,
-        Inspection_Expiry: periodicInspectionExpiry || undefined,
+        Registration_Expiry: formatToIsoDateString(registrationExpiry) || undefined,
+        License_Expiry: formatToIsoDateString(registrationExpiry) || undefined,
+        Insurance_Expiry: formatToIsoDateString(insuranceExpiry) || undefined,
+        Periodic_Inspection_Expiry: formatToIsoDateString(periodicInspectionExpiry) || undefined,
+        Inspection_Expiry: formatToIsoDateString(periodicInspectionExpiry) || undefined,
 
         // Operational Status
         Operational_Status: status,
         Current_Odometer: typeof currentOdometer === 'number' ? currentOdometer : 0,
         Initial_Odometer: vehicle?.Initial_Odometer ?? (typeof currentOdometer === 'number' ? currentOdometer : 0),
-        Notes: notes.trim(),
+        Notes: safeTrim(notes),
 
         // Primary Driver synced for compatibility
-        Primary_Driver_ID: assignedEmployeeId || undefined,
-        Primary_Driver_Name: assignedUserName.trim() || empName,
+        Primary_Driver_ID: safeTrim(assignedEmployeeId) || undefined,
+        Primary_Driver_Name: safeTrim(assignedUserName) || empName,
       };
+
+      const payload = normalizeVehiclePayload(rawPayload);
 
       let res;
       if (isEdit && vehicle) {

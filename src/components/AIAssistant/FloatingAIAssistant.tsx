@@ -221,21 +221,51 @@ export const FloatingAIAssistant: React.FC = () => {
 
   return (
     <>
-      {/* Floating Action Button */}
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 start-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white shadow-xl hover:shadow-indigo-500/25 transition-all duration-300 hover:scale-105 group border border-white/20 ${isOpen ? 'hidden' : 'flex'}`}
-        title="مساعد ريجين الذكي"
-      >
-        <div className="relative flex items-center justify-center">
-          <Sparkles className="w-5 h-5 animate-pulse text-amber-300" />
-          <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-          </span>
-        </div>
-        <span className="font-bold text-sm tracking-wide">مساعد ريجين الذكي</span>
-      </button>
+      {/* 3D Rejeen AI Floating Orb (Bottom-Left) */}
+      <div className={`fixed bottom-5 left-4 sm:bottom-6 sm:left-6 z-40 ${isOpen ? 'hidden' : 'block'}`}>
+        <button
+          onClick={() => setIsOpen(true)}
+          aria-label="مساعد ريجين الذكي"
+          className="group relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full cursor-pointer focus:outline-none transition-transform duration-300 hover:scale-105 active:scale-95"
+        >
+          {/* Ambient Outer Glow */}
+          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-indigo-600 via-purple-600 to-cyan-400 blur-md opacity-75 group-hover:opacity-100 group-hover:blur-lg transition-all duration-300 orb-breathe-anim" />
+
+          {/* 3D Glass Sphere Body */}
+          <div className="relative w-full h-full rounded-full bg-gradient-to-br from-indigo-900 via-purple-950 to-slate-950 p-[1.5px] shadow-2xl border border-white/30 backdrop-blur-md overflow-hidden flex items-center justify-center">
+            {/* Dynamic Rotating Plasma Core */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/50 via-fuchsia-500/40 to-cyan-400/50 orb-spin-anim opacity-80 group-hover:opacity-100 transition-opacity" />
+
+            {/* Internal 3D Depth Shading */}
+            <div className="absolute inset-0 rounded-full shadow-[inset_0_2px_8px_rgba(255,255,255,0.4),inset_0_-4px_10px_rgba(0,0,0,0.8)]" />
+
+            {/* Specular Highlight / Glass Reflection */}
+            <div className="absolute top-1.5 left-2.5 w-6 h-3 rounded-full bg-gradient-to-b from-white/70 to-transparent blur-[0.5px] -rotate-15 pointer-events-none" />
+
+            {/* Center Pulsating Voice Waves / AI Spark Lines */}
+            <div className="relative z-10 flex items-center justify-center gap-[2.5px]">
+              <span className="w-1 h-2.5 rounded-full bg-cyan-300/90 shadow-[0_0_6px_#67e8f9] animate-[orb-wave_1.3s_ease-in-out_infinite]" />
+              <span className="w-1 h-4 rounded-full bg-indigo-200 shadow-[0_0_6px_#c7d2fe] animate-[orb-wave_1.3s_ease-in-out_infinite_0.2s]" />
+              <span className="w-1.5 h-6 rounded-full bg-white shadow-[0_0_10px_#ffffff] animate-[orb-wave_1.3s_ease-in-out_infinite_0.4s]" />
+              <span className="w-1 h-4 rounded-full bg-fuchsia-200 shadow-[0_0_6px_#f5d0fe] animate-[orb-wave_1.3s_ease-in-out_infinite_0.6s]" />
+              <span className="w-1 h-2.5 rounded-full bg-pink-300/90 shadow-[0_0_6px_#f472b6] animate-[orb-wave_1.3s_ease-in-out_infinite_0.8s]" />
+            </div>
+
+            {/* Online Pulse Dot */}
+            <span className="absolute top-2 right-2 flex h-2.5 w-2.5 z-20">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400 border border-slate-900 shadow-xs"></span>
+            </span>
+          </div>
+
+          {/* Hover Tooltip (Appears above the Orb) */}
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-200 transform group-hover:-translate-y-1 bg-slate-950/90 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-xl border border-indigo-500/30 shadow-2xl whitespace-nowrap z-50 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>مساعد ريجين الذكي</span>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950/90" />
+          </div>
+        </button>
+      </div>
 
       {/* Floating Assistant Drawer / Dialog */}
       {isOpen && (
@@ -243,7 +273,7 @@ export const FloatingAIAssistant: React.FC = () => {
           className={`fixed z-50 transition-all duration-300 flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl overflow-hidden ${
             isExpanded 
               ? 'inset-4 md:inset-10' 
-              : 'bottom-6 start-6 w-[94vw] sm:w-[460px] h-[640px] max-h-[88vh]'
+              : 'bottom-4 left-4 sm:bottom-6 sm:left-6 w-[94vw] sm:w-[460px] h-[640px] max-h-[88vh]'
           }`}
         >
           {/* Header */}

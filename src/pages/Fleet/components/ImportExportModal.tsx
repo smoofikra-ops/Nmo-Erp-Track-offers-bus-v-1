@@ -380,8 +380,8 @@ export function ImportExportModal({
         const colStatus = findColIndex('حالة التشغيل', 'Operational_Status', 'status', 'الحالة');
         const colNotes = findColIndex('الملاحظات', 'Notes', 'ملاحظات', 'notes');
 
-        const existingVins = new Set(vehicles.map(v => (v.VIN_Chassis_Number || v.VIN || '').trim().toUpperCase()).filter(Boolean));
-        const existingPlates = new Set(vehicles.map(v => v.Plate_Number.trim().toUpperCase()).filter(Boolean));
+        const existingVins = new Set(vehicles.map(v => String(v.VIN_Chassis_Number || v.VIN || '').trim().toUpperCase()).filter(Boolean));
+        const existingPlates = new Set(vehicles.map(v => String(v.Plate_Number || '').trim().toUpperCase()).filter(Boolean));
         const seenVinsInFile = new Set<string>();
         const seenPlatesInFile = new Set<string>();
 

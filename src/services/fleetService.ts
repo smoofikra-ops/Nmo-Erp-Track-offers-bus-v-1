@@ -26,7 +26,12 @@ import {
   calculateFuelMetrics, 
   generateFleetNotifications 
 } from '@/utils/fleetCalculations';
-import { formatToIsoDateString } from '@/data/fleetMasterData';
+import { 
+  formatToIsoDateString, 
+  normalizeVehiclePayload, 
+  safeTrim, 
+  safeNumber 
+} from '@/data/fleetMasterData';
 import { archiveDb } from '@/db/archiveDb';
 
 const STORAGE_KEYS = {
@@ -152,17 +157,21 @@ function refreshVehicleCalculations(vehicle: Vehicle): Vehicle {
   const vAccidents = accidentCache.filter(a => !a.IsDeleted && a.Vehicle_ID === vehicle.Vehicle_ID);
   const vFuel = fuelCache.filter(f => !f.IsDeleted && f.Vehicle_ID === vehicle.Vehicle_ID);
 
-  // Latest Insurance Expiry
+  // Latest Insurance Expiry: if explicitly set in vehicle record/edit payload, prioritize it; otherwise use latest sub-log
   const latestIns = [...vInsurance].sort((a, b) => new Date(b.End_Date).getTime() - new Date(a.End_Date).getTime())[0];
-  const rawInsuranceExpiry = latestIns?.End_Date || vehicle.Insurance_Expiry;
+  const rawInsuranceExpiry = vehicle.Insurance_Expiry !== undefined ? vehicle.Insurance_Expiry : latestIns?.End_Date;
   const insuranceExpiry = formatToIsoDateString(rawInsuranceExpiry);
 
   // Latest Compliance Expiries
   const latestComp = [...vCompliance].sort((a, b) => new Date(b.Inspection_Expiry).getTime() - new Date(a.Inspection_Expiry).getTime())[0];
-  const rawInspectionExpiry = latestComp?.Inspection_Expiry || vehicle.Periodic_Inspection_Expiry || vehicle.Inspection_Expiry;
+  const rawInspectionExpiry = (vehicle.Periodic_Inspection_Expiry !== undefined ? vehicle.Periodic_Inspection_Expiry : vehicle.Inspection_Expiry) !== undefined
+    ? (vehicle.Periodic_Inspection_Expiry || vehicle.Inspection_Expiry)
+    : latestComp?.Inspection_Expiry;
   const inspectionExpiry = formatToIsoDateString(rawInspectionExpiry);
 
-  const rawRegistrationExpiry = latestComp?.License_Expiry || vehicle.Registration_Expiry || vehicle.License_Expiry;
+  const rawRegistrationExpiry = (vehicle.Registration_Expiry !== undefined ? vehicle.Registration_Expiry : vehicle.License_Expiry) !== undefined
+    ? (vehicle.Registration_Expiry || vehicle.License_Expiry)
+    : latestComp?.License_Expiry;
   const registrationExpiry = formatToIsoDateString(rawRegistrationExpiry);
 
   // Next Maintenance
@@ -318,64 +327,65 @@ export const fleetService = {
       vehicleId = generateUniqueEntityId('VEH', existingVehicleIds);
     }
 
-    const yr = Number(vehicleData.Manufacturing_Year || vehicleData.Year) || new Date().getFullYear();
-    const vinVal = vehicleData.VIN_Chassis_Number || vehicleData.VIN || vehicleData.Chassis_Number || '';
+    const normalizedInput = normalizeVehiclePayload(vehicleData);
+    const yr = safeNumber(normalizedInput.Manufacturing_Year || normalizedInput.Year, new Date().getFullYear());
+    const vinVal = safeTrim(normalizedInput.VIN_Chassis_Number || normalizedInput.VIN || normalizedInput.Chassis_Number);
 
     const newVehicle: Vehicle = {
       Vehicle_ID: vehicleId,
       CompanyID: companyId,
       
       // Ownership & Usage
-      Owner_Name: vehicleData.Owner_Name || '',
-      Assigned_User_Name: vehicleData.Assigned_User_Name || vehicleData.Primary_Driver_Name || '',
-      Owner_ID_Number: vehicleData.Owner_ID_Number || '',
-      User_ID_Number: vehicleData.User_ID_Number || '',
-      Assigned_Employee_ID: vehicleData.Assigned_Employee_ID || vehicleData.Primary_Driver_ID || '',
+      Owner_Name: safeTrim(normalizedInput.Owner_Name),
+      Assigned_User_Name: safeTrim(normalizedInput.Assigned_User_Name || normalizedInput.Primary_Driver_Name),
+      Owner_ID_Number: safeTrim(normalizedInput.Owner_ID_Number),
+      User_ID_Number: safeTrim(normalizedInput.User_ID_Number),
+      Assigned_Employee_ID: safeTrim(normalizedInput.Assigned_Employee_ID || normalizedInput.Primary_Driver_ID),
 
       // Identification & Specs
       VIN_Chassis_Number: vinVal,
       VIN: vinVal,
       Chassis_Number: vinVal,
-      Serial_Number: vehicleData.Serial_Number || vehicleData.Registration_Number || '',
-      Registration_Number: vehicleData.Registration_Number || vehicleData.Serial_Number || '',
-      Plate_Number: vehicleData.Plate_Number || 'بدون لوحة',
-      Brand: vehicleData.Brand || 'غير محدد',
-      Make: vehicleData.Brand || vehicleData.Make || 'غير محدد',
-      Model: vehicleData.Model || 'غير محدد',
+      Serial_Number: safeTrim(normalizedInput.Serial_Number || normalizedInput.Registration_Number),
+      Registration_Number: safeTrim(normalizedInput.Registration_Number || normalizedInput.Serial_Number),
+      Plate_Number: safeTrim(normalizedInput.Plate_Number) || 'بدون لوحة',
+      Brand: safeTrim(normalizedInput.Brand) || 'غير محدد',
+      Make: safeTrim(normalizedInput.Make || normalizedInput.Brand) || 'غير محدد',
+      Model: safeTrim(normalizedInput.Model) || 'غير محدد',
       Manufacturing_Year: yr,
       Year: yr,
-      Color: vehicleData.Color || 'أبيض',
-      Registration_Type: vehicleData.Registration_Type || 'خصوصي',
-      Load_Capacity: Number(vehicleData.Load_Capacity) || 0,
-      Vehicle_Weight: Number(vehicleData.Vehicle_Weight) || 0,
+      Color: safeTrim(normalizedInput.Color) || 'أبيض',
+      Registration_Type: safeTrim(normalizedInput.Registration_Type) || 'خصوصي',
+      Load_Capacity: safeNumber(normalizedInput.Load_Capacity, 0),
+      Vehicle_Weight: safeNumber(normalizedInput.Vehicle_Weight, 0),
 
       // Expiries
-      Registration_Expiry: vehicleData.Registration_Expiry || vehicleData.License_Expiry || '',
-      License_Expiry: vehicleData.Registration_Expiry || vehicleData.License_Expiry || '',
-      Insurance_Expiry: vehicleData.Insurance_Expiry || '',
-      Periodic_Inspection_Expiry: vehicleData.Periodic_Inspection_Expiry || vehicleData.Inspection_Expiry || '',
-      Inspection_Expiry: vehicleData.Periodic_Inspection_Expiry || vehicleData.Inspection_Expiry || '',
+      Registration_Expiry: formatToIsoDateString(normalizedInput.Registration_Expiry || normalizedInput.License_Expiry),
+      License_Expiry: formatToIsoDateString(normalizedInput.Registration_Expiry || normalizedInput.License_Expiry),
+      Insurance_Expiry: formatToIsoDateString(normalizedInput.Insurance_Expiry),
+      Periodic_Inspection_Expiry: formatToIsoDateString(normalizedInput.Periodic_Inspection_Expiry || normalizedInput.Inspection_Expiry),
+      Inspection_Expiry: formatToIsoDateString(normalizedInput.Periodic_Inspection_Expiry || normalizedInput.Inspection_Expiry),
 
       // Operational & Status
-      Vehicle_Type: vehicleData.Vehicle_Type || 'SEDAN',
-      Fuel_Type: vehicleData.Fuel_Type || 'GASOLINE_91',
-      Tank_Capacity: Number(vehicleData.Tank_Capacity) || 50,
-      Avg_km_per_L: Number(vehicleData.Avg_km_per_L) || 10,
-      Contract_Company: vehicleData.Contract_Company || '',
-      Ownership_Type: vehicleData.Ownership_Type || 'OWNED',
-      Operational_Status: vehicleData.Operational_Status || 'ACTIVE',
-      Primary_Driver_ID: vehicleData.Assigned_Employee_ID || vehicleData.Primary_Driver_ID || '',
-      Primary_Driver_Name: vehicleData.Assigned_User_Name || vehicleData.Primary_Driver_Name || '',
-      Backup_Driver_ID: vehicleData.Backup_Driver_ID || '',
-      Backup_Driver_Name: vehicleData.Backup_Driver_Name || '',
-      Supervisor_ID: vehicleData.Supervisor_ID || '',
-      Supervisor_Name: vehicleData.Supervisor_Name || '',
-      Assignment_Start_Date: vehicleData.Assignment_Start_Date || (vehicleData.Primary_Driver_ID || vehicleData.Assigned_Employee_ID ? now.split('T')[0] : ''),
-      Current_Odometer: Number(vehicleData.Current_Odometer) || 0,
-      Initial_Odometer: Number(vehicleData.Initial_Odometer || vehicleData.Current_Odometer) || 0,
+      Vehicle_Type: normalizedInput.Vehicle_Type || 'SEDAN',
+      Fuel_Type: normalizedInput.Fuel_Type || 'GASOLINE_91',
+      Tank_Capacity: safeNumber(normalizedInput.Tank_Capacity, 50),
+      Avg_km_per_L: safeNumber(normalizedInput.Avg_km_per_L, 10),
+      Contract_Company: safeTrim(normalizedInput.Contract_Company),
+      Ownership_Type: normalizedInput.Ownership_Type || 'OWNED',
+      Operational_Status: normalizedInput.Operational_Status || 'ACTIVE',
+      Primary_Driver_ID: safeTrim(normalizedInput.Assigned_Employee_ID || normalizedInput.Primary_Driver_ID),
+      Primary_Driver_Name: safeTrim(normalizedInput.Assigned_User_Name || normalizedInput.Primary_Driver_Name),
+      Backup_Driver_ID: safeTrim(normalizedInput.Backup_Driver_ID),
+      Backup_Driver_Name: safeTrim(normalizedInput.Backup_Driver_Name),
+      Supervisor_ID: safeTrim(normalizedInput.Supervisor_ID),
+      Supervisor_Name: safeTrim(normalizedInput.Supervisor_Name),
+      Assignment_Start_Date: normalizedInput.Assignment_Start_Date || (normalizedInput.Primary_Driver_ID || normalizedInput.Assigned_Employee_ID ? now.split('T')[0] : ''),
+      Current_Odometer: safeNumber(normalizedInput.Current_Odometer, 0),
+      Initial_Odometer: safeNumber(normalizedInput.Initial_Odometer ?? normalizedInput.Current_Odometer, 0),
       Readiness_Index: 100,
-      Notes: vehicleData.Notes || '',
-      Image_URL: vehicleData.Image_URL || '',
+      Notes: safeTrim(normalizedInput.Notes),
+      Image_URL: safeTrim(normalizedInput.Image_URL),
       CreatedAt: now,
       UpdatedAt: now,
       CreatedBy: user?.name || 'ADMIN',
@@ -465,9 +475,10 @@ export const fleetService = {
 
     const oldData = { ...vehiclesCache[idx] };
     const now = new Date().toISOString();
+    const normalizedUpdates = normalizeVehiclePayload(updateData);
     const merged: Vehicle = {
       ...oldData,
-      ...updateData,
+      ...normalizedUpdates,
       UpdatedAt: now,
       UpdatedBy: user?.name || oldData.UpdatedBy || 'ADMIN',
     };

@@ -9,19 +9,10 @@ import {
   EyeOff,
   AlertCircle,
   ArrowRight,
-  ShieldCheck,
-  Sparkles
+  ShieldCheck
 } from 'lucide-react';
 import { settingsService } from '@/services/settingsService';
 import { Spatial3DCanvas } from '@/components/auth/Spatial3DCanvas';
-
-// Typewriter practical operational phrases highlighting a unified system
-const TYPEWRITER_PHRASES = [
-  'منظومة تشغيلية موحدة تربط كافة العمليات',
-  'العمليات، الأسطول، المخزون، والعمولات في فضاء متكامل',
-  'متابعة لحظية وتدفق بيانات مباشر لكافة الأقسام',
-  'رؤية شاملة ومساعد ذكي مدعوم بالذكاء الاصطناعي'
-];
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -30,12 +21,6 @@ export function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>('');
-
-  // Typewriter state
-  const [typewriterText, setTypewriterText] = useState('');
-  const [phraseIndex, setPhraseIndex] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -47,50 +32,7 @@ export function Login() {
         setLogoUrl(res.data.settings.LogoURL);
       }
     }).catch(() => {});
-
-    // Check reduced motion preference
-    if (typeof window !== 'undefined') {
-      const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-      setPrefersReducedMotion(mediaQuery.matches);
-    }
   }, []);
-
-  // Natural Typewriter Effect Loop
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      setTypewriterText(TYPEWRITER_PHRASES[0]);
-      return;
-    }
-
-    const currentPhrase = TYPEWRITER_PHRASES[phraseIndex];
-    let timer: NodeJS.Timeout;
-
-    if (!isDeleting) {
-      // Typing forward
-      if (typewriterText.length < currentPhrase.length) {
-        timer = setTimeout(() => {
-          setTypewriterText(currentPhrase.slice(0, typewriterText.length + 1));
-        }, 50 + Math.random() * 25);
-      } else {
-        // Pause at completion
-        timer = setTimeout(() => {
-          setIsDeleting(true);
-        }, 2600);
-      }
-    } else {
-      // Deleting backward
-      if (typewriterText.length > 0) {
-        timer = setTimeout(() => {
-          setTypewriterText(currentPhrase.slice(0, typewriterText.length - 1));
-        }, 24);
-      } else {
-        setIsDeleting(false);
-        setPhraseIndex((prev) => (prev + 1) % TYPEWRITER_PHRASES.length);
-      }
-    }
-
-    return () => clearTimeout(timer);
-  }, [typewriterText, isDeleting, phraseIndex, prefersReducedMotion]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,12 +52,6 @@ export function Login() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickFill = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setError('');
   };
 
   return (
@@ -145,7 +81,7 @@ export function Login() {
         <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
 
           {/* ============================================================ */}
-          {/* القسم الأول: بطاقة تسجيل الدخول (Right/Primary Form in RTL) */}
+          {/* بطاقة تسجيل الدخول (Right/Primary Form in RTL)                */}
           {/* ============================================================ */}
           <div className="lg:col-span-5 w-full max-w-md mx-auto order-1 lg:order-1">
             <div
@@ -158,9 +94,9 @@ export function Login() {
               {/* Top Accent Glow Line */}
               <div className="absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
 
-              {/* Header inside Login Card */}
-              <div className="text-center sm:text-start mb-7">
-                <div className="flex items-center justify-center sm:justify-start gap-3.5 mb-5">
+              {/* Header inside Login Card: Product Identity ONLY */}
+              <div className="text-center mb-7">
+                <div className="flex items-center justify-center gap-3 mb-4">
                   {logoUrl ? (
                     <img
                       src={logoUrl}
@@ -174,23 +110,11 @@ export function Login() {
                       </div>
                     </div>
                   )}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-lg text-white tracking-tight">NMO ERP</span>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                        إصدار المؤسسات
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 font-medium">نظام نمو لإدارة العمليات والتوزيع</p>
-                  </div>
                 </div>
 
-                <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-2">
-                  مرحبًا بعودتك
+                <h1 className="text-lg sm:text-xl font-black text-white tracking-wide font-mono">
+                  NMO LABS ERP — REGINE
                 </h1>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  سجّل الدخول للوصول إلى لوحة التحكم وإدارة العمليات
-                </p>
               </div>
 
               {/* Error Message Box */}
@@ -291,38 +215,8 @@ export function Login() {
                 </button>
               </form>
 
-              {/* Quick Fill Demo Helper (Discreet & Practical) */}
-              <div className="mt-6 pt-5 border-t border-slate-800/80">
-                <p className="text-[11px] font-medium text-slate-400 mb-2.5 text-center sm:text-start">
-                  حسابات الوصول السريع التجريبية:
-                </p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill('admin@erp.com', 'admin')}
-                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center cursor-pointer"
-                  >
-                    مدير النظام
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill('rep@erp.com', 'rep')}
-                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center cursor-pointer"
-                  >
-                    مندوب مبيعات
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickFill('acc@erp.com', 'acc')}
-                    className="px-2 py-1.5 rounded-xl bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/40 border border-slate-700/50 text-[11px] text-slate-300 hover:text-white transition-all text-center cursor-pointer"
-                  >
-                    محاسب مالي
-                  </button>
-                </div>
-              </div>
-
-              {/* Security Badge */}
-              <div className="mt-5 flex items-center justify-center gap-2 text-[11px] text-slate-400">
+              {/* Security Indicator */}
+              <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-slate-400">
                 <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>اتصال مشفر وآمن عبر شبكة NMO Cloud</span>
               </div>
@@ -330,32 +224,33 @@ export function Login() {
           </div>
 
           {/* ============================================================ */}
-          {/* القسم الثاني: الفضاء البصري ثلاثي الأبعاد — منظومة موحدة      */}
+          {/* الفضاء البصري ثلاثي الأبعاد + هوية NMO LABS                   */}
           {/* ============================================================ */}
-          <div className="lg:col-span-7 flex flex-col justify-center order-2 lg:order-2">
+          <div className="lg:col-span-7 flex flex-col justify-center order-2 lg:order-2 space-y-6">
 
-            {/* Clean Hero Title & Ambient Typewriter (Zero cards, zero pills) */}
-            <div className="mb-4 text-center lg:text-start space-y-3">
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.25]">
-                منظومة تشغيلية موحدة، <br className="hidden sm:inline" />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-blue-300 to-purple-300">
-                  مترابطة في فضاء رقمي متكامل
-                </span>
-              </h2>
+            {/* Premium NMO LABS Brand Header */}
+            <div className="text-center lg:text-start select-none">
+              <div className="inline-block relative">
+                {/* Subtle Ambient Glow Behind Typography */}
+                <div className="absolute -inset-x-6 -inset-y-4 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 rounded-3xl blur-2xl pointer-events-none" />
 
-              {/* Typewriter Line */}
-              <div className="min-h-[32px] flex items-center justify-center lg:justify-start">
-                <div className="inline-flex items-center gap-2 text-sm sm:text-base text-slate-300 font-medium">
-                  <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span className="text-slate-200 font-semibold">{typewriterText}</span>
-                  {!prefersReducedMotion && (
-                    <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse" />
-                  )}
+                {/* Primary Brand Title */}
+                <h2 className="relative text-4xl sm:text-5xl lg:text-6xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-b from-white via-slate-100 to-slate-400 drop-shadow-[0_2px_12px_rgba(255,255,255,0.15)] font-mono">
+                  NMO LABS
+                </h2>
+
+                {/* Secondary Line */}
+                <div className="relative flex items-center justify-center lg:justify-start gap-3 mt-1.5">
+                  <div className="h-px w-6 bg-indigo-500/40" />
+                  <span className="text-xs sm:text-sm font-semibold tracking-[0.25em] uppercase text-indigo-300/90 font-mono">
+                    Tech & Marketing
+                  </span>
+                  <div className="h-px w-6 bg-purple-500/40" />
                 </div>
               </div>
             </div>
 
-            {/* Pure 3D Spatial Composition (Visual story of connected ERP modules) */}
+            {/* Pure 3D Spatial Interactive Composition */}
             <div className="relative w-full">
               <Spatial3DCanvas />
             </div>
@@ -366,7 +261,7 @@ export function Login() {
       </div>
 
       {/* ============================================================ */}
-      {/* أسفل الصفحة: الروابط والحقوق (RTL Footer) */}
+      {/* أسفل الصفحة: الروابط والحقوق (RTL Footer)                     */}
       {/* ============================================================ */}
       <footer className="relative z-10 border-t border-slate-900/80 bg-slate-950/80 backdrop-blur-md py-4 px-6">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
