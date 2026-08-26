@@ -3,9 +3,9 @@ import { Vehicle } from '@/types/fleet';
 import { ReadinessGauge } from './ReadinessGauge';
 import { calculateExpiryStatus } from '@/data/fleetMasterData';
 import { 
-  Truck, Car, Gauge, User, AlertTriangle, ShieldCheck, 
-  Fuel, Wrench, MoreVertical, Eye, Edit, Trash2, Calendar,
-  Shield, FileText, CheckCircle2, AlertCircle, Sparkles, Clock, Info
+  Gauge, User, AlertTriangle, 
+  Fuel, Wrench, MoreVertical, Eye, Edit, Trash2,
+  CheckCircle2, AlertCircle, Info
 } from 'lucide-react';
 
 interface VehicleCardProps {
@@ -52,7 +52,7 @@ export function VehicleCard({
   const inspStatus = calculateExpiryStatus(inspExpiry);
 
   const readinessScore = vehicle.Readiness_Score ?? vehicle.Readiness_Index ?? 100;
-  const displayUser = vehicle.Assigned_User_Name || vehicle.Primary_Driver_Name || 'بدون مستخدم';
+  const displayUser = vehicle.Assigned_User_Name || vehicle.Primary_Driver_Name || (vehicle as any).Driver_Name || vehicle.Owner_Name || 'سائق غير محدد';
 
   // Calculate Risk Level & Collect Issues List
   const { riskLevel, issues, primaryReason } = React.useMemo(() => {
@@ -181,7 +181,7 @@ export function VehicleCard({
     };
   }, [insStatus, inspStatus, regStatus, vehicle.Operational_Status, readinessScore, statusConfig.label]);
 
-  // Visual Theme Config according to Risk Level (Refined Static 3D Neon Borders)
+  // Visual Theme Config according to Risk Level (3D Neon-style Borders)
   const riskTheme = {
     CRITICAL: {
       cardWrapperClass: 'border-2 border-rose-500 vehicle-critical-pulse',
@@ -193,16 +193,16 @@ export function VehicleCard({
       reasonIconColor: 'text-rose-600 dark:text-rose-400'
     },
     WARNING: {
-      cardWrapperClass: 'border-2 border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.3),inset_0_0_0_1px_rgba(249,115,22,0.2)]',
+      cardWrapperClass: 'border-2 border-orange-500 shadow-[0_2px_10px_rgba(249,115,22,0.25),inset_0_0_0_1px_rgba(249,115,22,0.15)]',
       badgeBg: 'bg-orange-50 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border-orange-200 dark:border-orange-800',
       dotBg: 'bg-orange-500',
-      badgeLabel: 'تنبيه تشغيلي',
+      badgeLabel: 'تحذير تشغيلي',
       reasonBanner: 'bg-orange-50/90 dark:bg-orange-950/50 border-orange-200 dark:border-orange-900/60 text-orange-900 dark:text-orange-200',
       reasonIcon: AlertTriangle,
       reasonIconColor: 'text-orange-600 dark:text-orange-400'
     },
     ATTENTION: {
-      cardWrapperClass: 'border-2 border-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.3),inset_0_0_0_1px_rgba(251,191,36,0.2)]',
+      cardWrapperClass: 'border-2 border-amber-400 shadow-[0_2px_8px_rgba(251,191,36,0.2),inset_0_0_0_1px_rgba(251,191,36,0.15)]',
       badgeBg: 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800',
       dotBg: 'bg-amber-400',
       badgeLabel: 'تحتاج متابعة',
@@ -211,10 +211,10 @@ export function VehicleCard({
       reasonIconColor: 'text-amber-600 dark:text-amber-400'
     },
     NORMAL: {
-      cardWrapperClass: 'border-2 border-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.25),inset_0_0_0_1px_rgba(16,185,129,0.15)]',
+      cardWrapperClass: 'border-2 border-emerald-500/80 shadow-[0_2px_8px_rgba(16,185,129,0.15),inset_0_0_0_1px_rgba(16,185,129,0.1)]',
       badgeBg: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
       dotBg: 'bg-emerald-500',
-      badgeLabel: 'آمنة / نشطة',
+      badgeLabel: 'سليم / آمنة',
       reasonBanner: 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/40 text-emerald-900 dark:text-emerald-200',
       reasonIcon: CheckCircle2,
       reasonIconColor: 'text-emerald-600 dark:text-emerald-400'
@@ -225,15 +225,17 @@ export function VehicleCard({
 
   return (
     <div className={`relative bg-white dark:bg-slate-900 rounded-2xl transition-all duration-200 flex flex-col justify-between overflow-hidden group ${riskTheme.cardWrapperClass}`}>
-      {/* Main Body */}
+      {/* Main Body Content */}
       <div className="p-3.5 pb-2.5 space-y-2.5">
         
-        {/* Header: Saudi Plate + Risk Badge + Gauge & Menu */}
+        {/* ======================================================== */}
+        {/* HEADER: LEVEL 1 (Plate) + LEVEL 3 (Risk & Readiness Gauge) */}
+        {/* ======================================================== */}
         <div className="flex items-center justify-between gap-2">
-          {/* Saudi Plate Badge & Risk Tag */}
+          {/* Right Group: Saudi Plate Badge + Risk Tag */}
           <div className="flex items-center gap-2 flex-wrap">
             {/* Saudi Plate Badge */}
-            <div className="inline-flex items-stretch border-2 border-slate-900 dark:border-slate-300 rounded-lg overflow-hidden shadow-2xs bg-white dark:bg-slate-800">
+            <div className="inline-flex items-stretch border-2 border-slate-900 dark:border-slate-300 rounded-lg overflow-hidden shadow-xs bg-white dark:bg-slate-800">
               <div className="bg-emerald-600 px-1.5 py-0.5 flex items-center justify-center text-[9px] font-black text-white uppercase tracking-tighter">
                 KSA
               </div>
@@ -242,7 +244,7 @@ export function VehicleCard({
               </div>
             </div>
 
-            {/* Smart Risk Indicator Badge */}
+            {/* Risk Indicator Badge */}
             <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black border shadow-2xs ${riskTheme.badgeBg}`}>
               <span className="relative flex h-2 w-2">
                 <span className={`inline-flex rounded-full h-2 w-2 ${riskLevel === 'CRITICAL' ? 'bg-rose-500' : riskLevel === 'WARNING' ? 'bg-orange-500' : riskLevel === 'ATTENTION' ? 'bg-amber-400' : 'bg-emerald-500'}`}></span>
@@ -251,9 +253,10 @@ export function VehicleCard({
             </div>
           </div>
 
-          {/* Readiness Gauge & Menu Dropdown */}
+          {/* Left Group: Unified "جاهزية الباص" Gauge & Quick Menu */}
           <div className="flex items-center gap-1.5">
-            <ReadinessGauge score={readinessScore} size="sm" showLabel={false} />
+            <ReadinessGauge score={readinessScore} size="xs" busLabel={true} />
+            
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
@@ -295,30 +298,78 @@ export function VehicleCard({
           </div>
         </div>
 
-        {/* Vehicle Brand & Model & Specs */}
+        {/* ======================================================== */}
+        {/* LEVEL 1: Vehicle Brand & Model & Specs + Operational Status */}
+        {/* ======================================================== */}
         <div>
           <div className="flex items-center justify-between gap-2">
             <h3 
               onClick={() => onViewDetails(vehicle.Vehicle_ID)}
-              className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 cursor-pointer transition-colors leading-tight truncate"
+              className="text-sm font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 cursor-pointer transition-colors leading-tight truncate"
             >
               {vehicle.Brand} {vehicle.Model}
             </h3>
-            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${statusConfig.bg}`}>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${statusConfig.bg}`}>
               {statusConfig.label}
             </span>
           </div>
-          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
             موديل {vehicle.Manufacturing_Year || vehicle.Year} • {vehicle.Color || 'أبيض'} • {vehicle.Registration_Type || 'خصوصي'}
           </p>
         </div>
 
-        {/* Smart Risk Reason Summary Banner */}
+        {/* ======================================================== */}
+        {/* LEVEL 2 & LEVEL 5: DRIVER IDENTITY (3D Badge) + ODOMETER */}
+        {/* ======================================================== */}
+        <div className="grid grid-cols-12 gap-2">
+          {/* Driver Identity Block (Col 7 / 8) - High Priority */}
+          <div 
+            className="col-span-7 sm:col-span-8 flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-slate-50 via-indigo-50/50 to-slate-50 dark:from-slate-800/90 dark:via-indigo-950/40 dark:to-slate-800/90 border border-indigo-100/90 dark:border-indigo-900/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_1px_3px_rgba(0,0,0,0.2)] min-w-0"
+            title={`السائق: ${displayUser}`}
+          >
+            {/* 3D Driver Avatar Icon */}
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-b from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-700 text-white flex items-center justify-center shrink-0 shadow-xs shadow-indigo-500/20 border-t border-indigo-400/50">
+              <User className="w-3.5 h-3.5" />
+            </div>
+
+            {/* Driver Text Hierarchy */}
+            <div className="min-w-0 flex-1 text-right">
+              <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 block leading-none">
+                السائق
+              </span>
+              <span className="font-extrabold text-slate-900 dark:text-white truncate block text-xs sm:text-[13px] leading-tight mt-0.5">
+                {displayUser}
+              </span>
+            </div>
+          </div>
+
+          {/* Odometer Block (Col 5 / 4) */}
+          <div 
+            className="col-span-5 sm:col-span-4 flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.8),0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] min-w-0"
+            title={`العداد: ${vehicle.Current_Odometer?.toLocaleString('en-US') || 0} كم`}
+          >
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-b from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs shadow-amber-500/20 border-t border-amber-300/60">
+              <Gauge className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0 flex-1 text-right">
+              <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 block leading-none">
+                العداد
+              </span>
+              <span className="font-extrabold text-slate-900 dark:text-white truncate block text-xs sm:text-[12px] font-mono leading-tight mt-0.5">
+                {vehicle.Current_Odometer?.toLocaleString('en-US') || 0} <span className="text-[9px] font-medium text-slate-500">كم</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ======================================================== */}
+        {/* LEVEL 4: PRIMARY ALERT BANNER (Immediate Problem)        */}
+        {/* ======================================================== */}
         <div className="relative">
           <div className={`p-2 rounded-xl border flex items-center justify-between gap-2 text-xs transition-colors ${riskTheme.reasonBanner}`}>
             <div className="flex items-center gap-1.5 min-w-0">
               <ReasonIconComponent className={`w-3.5 h-3.5 shrink-0 ${riskTheme.reasonIconColor}`} />
-              <span className="font-semibold text-[11px] truncate leading-tight">
+              <span className="font-bold text-[11px] truncate leading-tight">
                 {primaryReason}
               </span>
             </div>
@@ -330,7 +381,7 @@ export function VehicleCard({
                   onMouseEnter={() => setShowIssuesTooltip(true)}
                   onMouseLeave={() => setShowIssuesTooltip(false)}
                   onClick={() => setShowIssuesTooltip(!showIssuesTooltip)}
-                  className="px-1.5 py-0.5 rounded-md bg-white/80 dark:bg-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs hover:bg-white transition-all cursor-pointer"
+                  className="px-1.5 py-0.5 rounded-md bg-white/90 dark:bg-slate-800 text-[10px] font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs hover:bg-white transition-all cursor-pointer"
                 >
                   +{issues.length - 1} تنبيهات
                 </button>
@@ -352,36 +403,9 @@ export function VehicleCard({
           </div>
         </div>
 
-        {/* Key Info Grid */}
-        <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs">
-          {/* Assigned Driver/User */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="p-1 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 shrink-0">
-              <User className="w-3 h-3" />
-            </div>
-            <div className="min-w-0">
-              <span className="text-[9px] text-slate-400 block leading-tight">المستخدم / العهدة</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200 truncate block text-[11px]">
-                {displayUser}
-              </span>
-            </div>
-          </div>
-
-          {/* Odometer */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="p-1 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 shrink-0">
-              <Gauge className="w-3 h-3" />
-            </div>
-            <div className="min-w-0">
-              <span className="text-[9px] text-slate-400 block leading-tight">العداد</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200 truncate block text-[11px]">
-                {vehicle.Current_Odometer?.toLocaleString('en-US') || 0} كم
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Expiry Status Badges (Insurance, Registration, Inspection) */}
+        {/* ======================================================== */}
+        {/* LEVEL 5: THREE DOCUMENT STATUSES (Registration, Insurance, Inspection) */}
+        {/* ======================================================== */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 px-0.5">
             <span>الوثائق والتراخيص</span>
@@ -390,28 +414,30 @@ export function VehicleCard({
 
           <div className="grid grid-cols-3 gap-1 text-[10px]">
             {/* Registration */}
-            <div className={`py-1 px-1 rounded-lg border flex flex-col justify-center items-center text-center ${regStatus.badgeClass}`}>
+            <div className={`py-1 px-1 rounded-lg border flex flex-col justify-center items-center text-center shadow-2xs ${regStatus.badgeClass}`}>
               <span className="text-[8px] font-medium opacity-75">الاستمارة</span>
-              <span className="font-bold leading-tight mt-0.5">{regStatus.label}</span>
+              <span className="font-bold leading-tight mt-0.5 truncate max-w-full px-0.5">{regStatus.label}</span>
             </div>
 
             {/* Insurance */}
-            <div className={`py-1 px-1 rounded-lg border flex flex-col justify-center items-center text-center ${insStatus.badgeClass}`}>
+            <div className={`py-1 px-1 rounded-lg border flex flex-col justify-center items-center text-center shadow-2xs ${insStatus.badgeClass}`}>
               <span className="text-[8px] font-medium opacity-75">التأمين</span>
-              <span className="font-bold leading-tight mt-0.5">{insStatus.label}</span>
+              <span className="font-bold leading-tight mt-0.5 truncate max-w-full px-0.5">{insStatus.label}</span>
             </div>
 
             {/* Inspection */}
-            <div className={`py-1 px-1 rounded-lg border flex flex-col justify-center items-center text-center ${inspStatus.badgeClass}`}>
+            <div className={`py-1 px-1 rounded-lg border flex flex-col justify-center items-center text-center shadow-2xs ${inspStatus.badgeClass}`}>
               <span className="text-[8px] font-medium opacity-75">الفحص</span>
-              <span className="font-bold leading-tight mt-0.5">{inspStatus.label}</span>
+              <span className="font-bold leading-tight mt-0.5 truncate max-w-full px-0.5">{inspStatus.label}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Card Footer Actions */}
-      <div className="px-3.5 py-2 bg-slate-50/80 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+      {/* ======================================================== */}
+      {/* LEVEL 6: CARD ACTIONS FOOTER                             */}
+      {/* ======================================================== */}
+      <div className="px-3.5 py-2 bg-slate-50/90 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onQuickFuel(vehicle.Vehicle_ID)}
@@ -440,4 +466,5 @@ export function VehicleCard({
     </div>
   );
 }
+
 
