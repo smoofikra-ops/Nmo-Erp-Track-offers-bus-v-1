@@ -181,37 +181,37 @@ export function VehicleCard({
     };
   }, [insStatus, inspStatus, regStatus, vehicle.Operational_Status, readinessScore, statusConfig.label]);
 
-  // Visual Theme Config according to Risk Level
+  // Visual Theme Config according to Risk Level (Refined Static 3D Neon Borders)
   const riskTheme = {
     CRITICAL: {
-      cardWrapperClass: 'critical-animated-border vehicle-critical-pulse border-2 border-red-500 dark:border-red-500/90 shadow-lg shadow-red-500/10',
-      badgeBg: 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-800',
-      dotBg: 'bg-red-500 animate-ping',
+      cardWrapperClass: 'border-2 border-rose-500 vehicle-critical-pulse',
+      badgeBg: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+      dotBg: 'bg-rose-500',
       badgeLabel: 'حالة حرجة',
-      reasonBanner: 'bg-red-50/90 dark:bg-red-950/50 border-red-200 dark:border-red-900/60 text-red-900 dark:text-red-200',
+      reasonBanner: 'bg-rose-50/90 dark:bg-rose-950/50 border-rose-200 dark:border-rose-900/60 text-rose-900 dark:text-rose-200',
       reasonIcon: AlertCircle,
-      reasonIconColor: 'text-red-600 dark:text-red-400'
+      reasonIconColor: 'text-rose-600 dark:text-rose-400'
     },
     WARNING: {
-      cardWrapperClass: 'vehicle-warning-pulse border-2 border-amber-500/90 dark:border-amber-500/80 shadow-md shadow-amber-500/10',
-      badgeBg: 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-      dotBg: 'bg-amber-500',
+      cardWrapperClass: 'border-2 border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.3),inset_0_0_0_1px_rgba(249,115,22,0.2)]',
+      badgeBg: 'bg-orange-50 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+      dotBg: 'bg-orange-500',
       badgeLabel: 'تنبيه تشغيلي',
-      reasonBanner: 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200',
+      reasonBanner: 'bg-orange-50/90 dark:bg-orange-950/50 border-orange-200 dark:border-orange-900/60 text-orange-900 dark:text-orange-200',
       reasonIcon: AlertTriangle,
-      reasonIconColor: 'text-amber-600 dark:text-amber-400'
+      reasonIconColor: 'text-orange-600 dark:text-orange-400'
     },
     ATTENTION: {
-      cardWrapperClass: 'border-2 border-yellow-400/90 dark:border-yellow-500/70 shadow-xs hover:shadow-md hover:shadow-yellow-500/10',
-      badgeBg: 'bg-yellow-50 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
-      dotBg: 'bg-yellow-500',
+      cardWrapperClass: 'border-2 border-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.3),inset_0_0_0_1px_rgba(251,191,36,0.2)]',
+      badgeBg: 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      dotBg: 'bg-amber-400',
       badgeLabel: 'تحتاج متابعة',
-      reasonBanner: 'bg-yellow-50/80 dark:bg-yellow-950/40 border-yellow-200 dark:border-yellow-900/50 text-yellow-900 dark:text-yellow-200',
+      reasonBanner: 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200',
       reasonIcon: Info,
-      reasonIconColor: 'text-yellow-600 dark:text-yellow-400'
+      reasonIconColor: 'text-amber-600 dark:text-amber-400'
     },
     NORMAL: {
-      cardWrapperClass: 'border border-emerald-400/60 dark:border-emerald-500/40 shadow-2xs hover:shadow-md hover:shadow-emerald-500/10',
+      cardWrapperClass: 'border-2 border-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.25),inset_0_0_0_1px_rgba(16,185,129,0.15)]',
       badgeBg: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
       dotBg: 'bg-emerald-500',
       badgeLabel: 'آمنة / نشطة',
@@ -224,10 +224,7 @@ export function VehicleCard({
   const ReasonIconComponent = riskTheme.reasonIcon;
 
   return (
-    <div className={`relative bg-white dark:bg-slate-900 rounded-2xl transition-all duration-300 flex flex-col justify-between overflow-hidden group hover:scale-[1.01] ${riskTheme.cardWrapperClass}`}>
-      {/* Top Glass Specular Reflection Highlight */}
-      <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-white/40 dark:via-white/20 to-transparent pointer-events-none" />
-
+    <div className={`relative bg-white dark:bg-slate-900 rounded-2xl transition-all duration-200 flex flex-col justify-between overflow-hidden group ${riskTheme.cardWrapperClass}`}>
       {/* Main Body */}
       <div className="p-3.5 pb-2.5 space-y-2.5">
         
@@ -248,8 +245,7 @@ export function VehicleCard({
             {/* Smart Risk Indicator Badge */}
             <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black border shadow-2xs ${riskTheme.badgeBg}`}>
               <span className="relative flex h-2 w-2">
-                <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${riskTheme.dotBg}`}></span>
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${riskLevel === 'CRITICAL' ? 'bg-red-600' : riskLevel === 'WARNING' ? 'bg-amber-600' : riskLevel === 'ATTENTION' ? 'bg-yellow-500' : 'bg-emerald-600'}`}></span>
+                <span className={`inline-flex rounded-full h-2 w-2 ${riskLevel === 'CRITICAL' ? 'bg-rose-500' : riskLevel === 'WARNING' ? 'bg-orange-500' : riskLevel === 'ATTENTION' ? 'bg-amber-400' : 'bg-emerald-500'}`}></span>
               </span>
               <span>{riskTheme.badgeLabel}</span>
             </div>

@@ -196,6 +196,39 @@ function responseError(message, code = "ERROR", details = "") {
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
+// --- CACHE SERVICE FOR ULTRA-FAST READS ---
+const ServerCache = {
+  get: function(key) {
+    try {
+      const cache = CacheService.getScriptCache();
+      const val = cache.get(key);
+      return val ? JSON.parse(val) : null;
+    } catch(e) {
+      return null;
+    }
+  },
+  put: function(key, data, ttlSeconds) {
+    try {
+      if (!ttlSeconds) ttlSeconds = 300; // 5 min default
+      const cache = CacheService.getScriptCache();
+      const str = JSON.stringify(data);
+      if (str.length < 90000) {
+        cache.put(key, str, ttlSeconds);
+      }
+    } catch(e) {}
+  },
+  invalidate: function(keys) {
+    try {
+      const cache = CacheService.getScriptCache();
+      if (Array.isArray(keys)) {
+        cache.removeAll(keys);
+      } else if (typeof keys === 'string') {
+        cache.remove(keys);
+      }
+    } catch(e) {}
+  }
+};
+
 // --- CORE DB FUNCTIONS ---
 function resolveSheet(ss, tableName) {
   if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -290,6 +323,7 @@ function insertRow(tableName, obj) {
   });
   
   sheet.appendRow(rowData);
+  ServerCache.invalidate([tableName, tableName + '_COM-0001', 'Vehicles_COM-0001']);
   return obj;
 }
 
@@ -315,19 +349,17 @@ function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
   
   if (rowIndex === -1) throw new Error("Record not found with " + primaryKeyField + " = " + primaryKeyValue);
   
+  const rowCopy = [...data[rowIndex - 1]];
   let updatedFields = 0;
-  // update
+  
+  // Single-pass memory update for maximum speed
   for (let key in updateObj) {
     let colIndex = headers.indexOf(String(key).trim());
     if (colIndex !== -1) {
-      sheet.getRange(rowIndex, colIndex + 1).setValue(updateObj[key]);
+      rowCopy[colIndex] = updateObj[key];
       updatedFields++;
-    }
-  }
-  
-  if (updatedFields === 0) {
-    // If no fields matched exact header names, try checking aliases
-    for (let key in updateObj) {
+    } else {
+      // Check aliases
       let aliasKey = key;
       if (key === 'VIN') aliasKey = 'VIN_Chassis_Number';
       else if (key === 'VIN_Chassis_Number') aliasKey = 'VIN';
@@ -338,13 +370,16 @@ function updateRow(tableName, primaryKeyField, primaryKeyValue, updateObj) {
 
       let aliasColIndex = headers.indexOf(String(aliasKey).trim());
       if (aliasColIndex !== -1) {
-        sheet.getRange(rowIndex, aliasColIndex + 1).setValue(updateObj[key]);
+        rowCopy[aliasColIndex] = updateObj[key];
         updatedFields++;
       }
     }
   }
   
+  // Write the entire row in a single high-speed batch call
+  sheet.getRange(rowIndex, 1, 1, headers.length).setValues([rowCopy]);
   SpreadsheetApp.flush();
+  ServerCache.invalidate([tableName, tableName + '_COM-0001', 'Vehicles_COM-0001']);
   return { updatedFields };
 }
 
@@ -1899,7 +1934,13 @@ function handleDeleteOffer(payload) {
 
 function handleGetVehicles(payload) {
   const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
-  return getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
+  const cacheKey = 'Vehicles_' + companyId;
+  const cached = ServerCache.get(cacheKey);
+  if (cached) return cached;
+  
+  const vehicles = getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
+  ServerCache.put(cacheKey, vehicles, 180); // 3 minutes cache
+  return vehicles;
 }
 
 function handleGetVehicleById(payload) {

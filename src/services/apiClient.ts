@@ -16,17 +16,34 @@ export function getGasUrl(): string {
 export interface ApiRequestOptions {
   timeoutMs?: number;
   retries?: number;
+  dedup?: boolean;
 }
 
+// In-flight request deduplication map for concurrent read operations
+const inFlightRequests = new Map<string, Promise<ApiResponse<any>>>();
+
 export class ApiClient {
-  private static async request<T>(
+  private static getDedupKey(action: string, payload: any): string {
+    try {
+      return `${action}:${JSON.stringify(payload || {})}`;
+    } catch {
+      return `${action}:${String(payload)}`;
+    }
+  }
+
+  private static isReadAction(action: string): boolean {
+    const act = action.toUpperCase();
+    return act.startsWith('GET_') || act === 'GET_OFFERS' || act === 'GET_OFFER' || act === 'GET_SYSTEM_HEALTH';
+  }
+
+  private static async executeRequest<T>(
     action: string,
     payload: any = {},
     options: ApiRequestOptions = {}
   ): Promise<ApiResponse<T>> {
     const startTime = performance.now();
     const companyId = payload?.CompanyID || payload?.companyId || "COM-0001";
-    const timeoutMs = options.timeoutMs || 20000;
+    const timeoutMs = options.timeoutMs || 25000;
     const currentUrl = getGasUrl();
 
     if (!currentUrl) {
@@ -97,6 +114,11 @@ export class ApiClient {
         };
       }
 
+      if ((import.meta as any).env?.DEV) {
+        const payloadSizeKb = (rawText.length / 1024).toFixed(1);
+        console.debug(`[API Perf] ${action} | ${durationMs}ms | ${payloadSizeKb} KB | HTTP ${response.status}`);
+      }
+
       return parsedJson as ApiResponse<T>;
     } catch (error: any) {
       clearTimeout(timeoutId);
@@ -121,6 +143,34 @@ export class ApiClient {
         timestamp: new Date().toISOString(),
       };
     }
+  }
+
+  private static async request<T>(
+    action: string,
+    payload: any = {},
+    options: ApiRequestOptions = {}
+  ): Promise<ApiResponse<T>> {
+    const shouldDedup = options.dedup !== false && this.isReadAction(action);
+    const dedupKey = shouldDedup ? this.getDedupKey(action, payload) : null;
+
+    if (dedupKey && inFlightRequests.has(dedupKey)) {
+      if ((import.meta as any).env?.DEV) {
+        console.debug(`[API Dedup] Reusing in-flight request for: ${action}`);
+      }
+      return inFlightRequests.get(dedupKey) as Promise<ApiResponse<T>>;
+    }
+
+    const requestPromise = this.executeRequest<T>(action, payload, options).finally(() => {
+      if (dedupKey) {
+        inFlightRequests.delete(dedupKey);
+      }
+    });
+
+    if (dedupKey) {
+      inFlightRequests.set(dedupKey, requestPromise);
+    }
+
+    return requestPromise;
   }
 
   static async get<T>(

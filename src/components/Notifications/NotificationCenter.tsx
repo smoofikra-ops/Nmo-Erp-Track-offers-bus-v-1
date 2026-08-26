@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Bell, ShieldAlert, AlertTriangle, Package, DollarSign, Truck, Check, ExternalLink } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { fleetService } from '../../services/fleetService';
 import { commissionService } from '../../services/commissionService';
 import { productService } from '../../services/productService';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface ERPNotification {
   id: string;
@@ -15,105 +17,109 @@ export interface ERPNotification {
   linkTo: string;
 }
 
-const DEFAULT_COMPANY_ID = 'COM-0001';
-
 export const NotificationCenter: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<ERPNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const companyId = user?.currentCompanyId || 'COM-0001';
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
+  // Leverage shared query cache with zero redundant network requests
+  const { data: vehRes } = useQuery({
+    queryKey: ['vehicles', companyId],
+    queryFn: () => fleetService.getVehicles(companyId),
+    enabled: Boolean(companyId),
+    staleTime: 1000 * 60 * 3,
+  });
 
-  const loadNotifications = async () => {
-    try {
-      const results = await Promise.allSettled([
-        fleetService.getVehicles(DEFAULT_COMPANY_ID),
-        commissionService.getCommissionRecords(DEFAULT_COMPANY_ID),
-        productService.getProducts(DEFAULT_COMPANY_ID)
-      ]);
+  const { data: commRes } = useQuery({
+    queryKey: ['commissionRecords', companyId],
+    queryFn: () => commissionService.getCommissionRecords(companyId),
+    enabled: Boolean(companyId),
+    staleTime: 1000 * 60 * 3,
+  });
 
-      const vehRes = results[0].status === 'fulfilled' ? results[0].value : { success: false, data: [] };
-      const commRes = results[1].status === 'fulfilled' ? results[1].value : { success: false, data: [] };
-      const prodRes = results[2].status === 'fulfilled' ? results[2].value : { success: false, data: [] };
+  const { data: prodRes } = useQuery({
+    queryKey: ['products', companyId],
+    queryFn: () => productService.getProducts(companyId),
+    enabled: Boolean(companyId),
+    staleTime: 1000 * 60 * 5,
+  });
 
-      const notifs: ERPNotification[] = [];
-      const now = new Date();
+  const notifications = useMemo(() => {
+    const notifs: ERPNotification[] = [];
+    const now = new Date();
 
-      // 1. Fleet Expiry & Maintenance Alerts
-      const vehicles = (vehRes.data || []).filter(v => !v.IsDeleted);
-      vehicles.forEach(v => {
-        if (v.Insurance_Expiry) {
-          const diffDays = Math.ceil((new Date(v.Insurance_Expiry).getTime() - now.getTime()) / (1000 * 3600 * 24));
-          if (diffDays <= 30) {
-            notifs.push({
-              id: `notif-ins-${v.Vehicle_ID}`,
-              title: `انتهاء تأمين المركبة ${v.Plate_Number}`,
-              description: diffDays < 0 ? `وثيقة التأمين منتهية منذ ${Math.abs(diffDays)} يوم` : `ينتهي التأمين خلال ${diffDays} يوم`,
-              module: 'FLEET',
-              priority: diffDays <= 7 ? 'CRITICAL' : 'HIGH',
-              timestamp: 'الآن',
-              linkTo: `/fleet`
-            });
-          }
-        }
-
-        if (v.Operational_Status === 'IN_MAINTENANCE') {
+    // 1. Fleet Expiry & Maintenance Alerts
+    const vehicles = (vehRes?.data || []).filter((v: any) => !v.IsDeleted);
+    vehicles.forEach((v: any) => {
+      const insExpiry = v.Insurance_Expiry;
+      if (insExpiry) {
+        const diffDays = Math.ceil((new Date(insExpiry).getTime() - now.getTime()) / (1000 * 3600 * 24));
+        if (diffDays <= 30) {
           notifs.push({
-            id: `notif-mnt-${v.Vehicle_ID}`,
-            title: `مركبة قيد الصيانة (${v.Plate_Number})`,
-            description: `${v.Brand} ${v.Model} - متابعة أمر الصيانة والإصلاح`,
+            id: `notif-ins-${v.Vehicle_ID}`,
+            title: `انتهاء تأمين المركبة ${v.Plate_Number || ''}`,
+            description: diffDays < 0 ? `وثيقة التأمين منتهية منذ ${Math.abs(diffDays)} يوم` : `ينتهي التأمين خلال ${diffDays} يوم`,
             module: 'FLEET',
-            priority: 'MEDIUM',
-            timestamp: 'مستمر',
+            priority: diffDays <= 7 ? 'CRITICAL' : 'HIGH',
+            timestamp: 'الآن',
             linkTo: `/fleet`
           });
         }
-      });
-
-      // 2. Commissions Due Alerts
-      const records = commRes.data || [];
-      const pendingRecords = records.filter((c: any) => {
-        const total = Number(c.totalCommission) || Number(c.netAmount) || Number(c.amount) || 0;
-        const paid = Number(c.paidAmount) || 0;
-        return total > paid && total > 0;
-      });
-
-      if (pendingRecords.length > 0) {
-        notifs.push({
-          id: 'notif-comm-pending',
-          title: `مستحقات عمولات معلقة (${pendingRecords.length} حركة)`,
-          description: 'توجد مبالغ عمولات مستحقة لم يتم استكمال صرفها بالكامل',
-          module: 'COMMISSIONS',
-          priority: 'HIGH',
-          timestamp: 'اليوم',
-          linkTo: '/commission'
-        });
       }
 
-      // 3. Inventory Critical Stock Alerts
-      const products = prodRes.data || [];
-      const criticalProds = products.filter((p: any) => (p.Quantity || p.stock || 0) <= (p.MinQuantity || p.minStock || 5));
-      if (criticalProds.length > 0) {
+      if (v.Operational_Status === 'IN_MAINTENANCE') {
         notifs.push({
-          id: 'notif-prod-crit',
-          title: `مخزون حرج (${criticalProds.length} صنف)`,
-          description: 'بعض المنتجات وصلت للحد الأدنى في المستودع وتتطلب إعادة طلب',
-          module: 'INVENTORY',
-          priority: 'CRITICAL',
-          timestamp: 'الآن',
-          linkTo: '/inventory'
+          id: `notif-mnt-${v.Vehicle_ID}`,
+          title: `مركبة قيد الصيانة (${v.Plate_Number || ''})`,
+          description: `${v.Brand || ''} ${v.Model || ''} - متابعة أمر الصيانة والإصلاح`,
+          module: 'FLEET',
+          priority: 'MEDIUM',
+          timestamp: 'مستمر',
+          linkTo: `/fleet`
         });
       }
+    });
 
-      setNotifications(notifs);
-      setUnreadCount(notifs.length);
-    } catch (err) {
-      console.error('Failed to load notifications', err);
+    // 2. Commissions Due Alerts
+    const records = commRes?.data || [];
+    const pendingRecords = records.filter((c: any) => {
+      const total = Number(c.totalCommission) || Number(c.netAmount) || Number(c.amount) || 0;
+      const paid = Number(c.paidAmount) || 0;
+      return total > paid && total > 0;
+    });
+
+    if (pendingRecords.length > 0) {
+      notifs.push({
+        id: 'notif-comm-pending',
+        title: `مستحقات عمولات معلقة (${pendingRecords.length} حركة)`,
+        description: 'توجد مبالغ عمولات مستحقة لم يتم استكمال صرفها بالكامل',
+        module: 'COMMISSIONS',
+        priority: 'HIGH',
+        timestamp: 'اليوم',
+        linkTo: '/commission'
+      });
     }
-  };
+
+    // 3. Inventory Critical Stock Alerts
+    const products = prodRes?.data || [];
+    const criticalProds = products.filter((p: any) => (Number(p.AvailableQuantity) || Number(p.Quantity) || Number(p.stock) || 0) <= (Number(p.MinQuantity) || Number(p.minStock) || 5));
+    if (criticalProds.length > 0) {
+      notifs.push({
+        id: 'notif-prod-crit',
+        title: `مخزون حرج (${criticalProds.length} صنف)`,
+        description: 'بعض المنتجات وصلت للحد الأدنى في المستودع وتتطلب إعادة طلب',
+        module: 'INVENTORY',
+        priority: 'CRITICAL',
+        timestamp: 'الآن',
+        linkTo: '/inventory'
+      });
+    }
+
+    return notifs;
+  }, [vehRes, commRes, prodRes]);
+
+  const unreadCount = notifications.length;
 
   const getPriorityBadge = (p: ERPNotification['priority']) => {
     switch (p) {

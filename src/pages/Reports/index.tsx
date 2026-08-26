@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Vehicle, FuelLog, MaintenanceLog } from '@/types/fleet';
 import { fleetService } from '@/services/fleetService';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line 
@@ -12,27 +14,18 @@ import {
 import { Link } from 'react-router-dom';
 
 export function ReportsPage() {
+  const { user } = useAuth();
+  const companyId = user?.currentCompanyId || 'COM-0001';
   const [activeTab, setActiveTab] = useState<'FLEET' | 'COMMISSIONS' | 'HR'>('FLEET');
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadFleetData();
-  }, []);
+  const { data: vehRes, isLoading } = useQuery({
+    queryKey: ['vehicles', companyId],
+    queryFn: () => fleetService.getVehicles(companyId),
+    enabled: Boolean(companyId),
+    staleTime: 1000 * 60 * 3,
+  });
 
-  const loadFleetData = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fleetService.getVehicles('COM-0001');
-      if (res.success && res.data) {
-        setVehicles(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to load fleet data for reports:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const vehicles = (vehRes?.data || []).filter(v => !v.IsDeleted);
 
   // Fleet Analytics Data
   const fleetCostByMonth = [

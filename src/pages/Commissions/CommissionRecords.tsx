@@ -67,14 +67,16 @@ export function CommissionRecords() {
   const [financialAccessGranted, setFinancialAccessGranted] = useState(false);
   const [editRecordModal, setEditRecordModal] = useState<CommissionRecord | null>(null);
   
+  const companyId = user?.currentCompanyId || 'COM-0001';
   const canViewFinancials = user ? (hasPermission(user.role, RolePermissions.CAN_VIEW_FINANCIAL_SUMMARY) || financialAccessGranted) : false;
 
   const { data: allRecords = [] as CommissionRecord[], isLoading: recordsLoading } = useQuery<CommissionRecord[]>({
-    queryKey: ['commissionRecords'],
+    queryKey: ['commissionRecords', companyId],
     queryFn: async () => {
-      const response = await commissionService.getCommissionRecords('COM-0001');
+      const response = await commissionService.getCommissionRecords(companyId);
       return (response.data || []) as CommissionRecord[];
     },
+    staleTime: 1000 * 60 * 3,
   });
 
   
@@ -86,7 +88,7 @@ export function CommissionRecords() {
       if (res.success) {
         toast.success('تم التعديل بنجاح.');
         setEditRecordModal(null);
-        queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
+        queryClient.invalidateQueries({ queryKey: ['commissionRecords', companyId] });
       } else {
         toast.error('فشل التعديل');
       }

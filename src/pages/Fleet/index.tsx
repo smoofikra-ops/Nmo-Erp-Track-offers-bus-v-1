@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Vehicle, OperationalStatus, VehicleType } from '@/types/fleet';
 import { fleetService } from '@/services/fleetService';
+import { useAuth } from '@/contexts/AuthContext';
 import { VehicleCard } from './components/VehicleCard';
 import { VehicleTable } from './components/VehicleTable';
 import { VehicleDetails } from './VehicleDetails';
@@ -16,8 +18,23 @@ import {
 } from 'lucide-react';
 
 export default function FleetPage() {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const companyId = user?.currentCompanyId || 'COM-0001';
+  const queryClient = useQueryClient();
+
+  const {
+    data: vehiclesRes,
+    isLoading,
+    isFetching,
+    refetch: refetchVehicles
+  } = useQuery({
+    queryKey: ['vehicles', companyId],
+    queryFn: () => fleetService.getVehicles(companyId),
+    enabled: Boolean(companyId),
+    staleTime: 1000 * 60 * 3,
+  });
+
+  const vehicles: Vehicle[] = vehiclesRes?.data || [];
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
   // Search & Filter state
@@ -44,34 +61,15 @@ export default function FleetPage() {
   const [isArchiving, setIsArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState('');
 
-  useEffect(() => {
-    loadVehicles();
-  }, []);
-
-  const loadVehicles = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fleetService.getVehicles('COM-0001');
-      if (res.success && res.data) {
-        setVehicles(res.data);
-      }
-    } catch (err) {
-      console.error('Failed to load fleet vehicles:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleClearAllVehicles = async () => {
     try {
-      setIsLoading(true);
-      await fleetService.clearAllVehicles('COM-0001');
-      setVehicles([]);
+      await fleetService.clearAllVehicles(companyId);
+      queryClient.setQueryData(['vehicles', companyId], { success: true, data: [] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles', companyId] });
+      queryClient.invalidateQueries({ queryKey: ['fleetKPIs', companyId] });
       setIsClearAllModalOpen(false);
     } catch (err) {
       console.error('Failed to clear fleet vehicles:', err);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -123,11 +121,12 @@ export default function FleetPage() {
     setIsArchiving(true);
     setArchiveError('');
     try {
-      const res = await fleetService.archiveVehicle(vehicleToDelete.Vehicle_ID, archiveReason.trim(), 'COM-0001');
+      const res = await fleetService.archiveVehicle(vehicleToDelete.Vehicle_ID, archiveReason.trim(), companyId);
       if (res && res.success) {
         setVehicleToDelete(null);
         setArchiveReason('بيع المركبة أو خروجها من الخدمة');
-        await loadVehicles();
+        queryClient.invalidateQueries({ queryKey: ['vehicles', companyId] });
+        queryClient.invalidateQueries({ queryKey: ['fleetKPIs', companyId] });
       } else {
         setArchiveError(res?.message || 'تعذر أرشفة المركبة في الخادم');
       }
@@ -138,6 +137,11 @@ export default function FleetPage() {
     }
   };
 
+  const handleRefreshData = () => {
+    queryClient.invalidateQueries({ queryKey: ['vehicles', companyId] });
+    queryClient.invalidateQueries({ queryKey: ['fleetKPIs', companyId] });
+  };
+
   // If a vehicle detail is open, display the detail view
   if (selectedVehicleId) {
     return (
@@ -145,7 +149,7 @@ export default function FleetPage() {
         <VehicleDetails
           vehicleId={selectedVehicleId}
           onBack={() => setSelectedVehicleId(null)}
-          onVehicleUpdated={loadVehicles}
+          onVehicleUpdated={handleRefreshData}
         />
       </div>
     );
@@ -357,11 +361,11 @@ export default function FleetPage() {
             </div>
 
             <button
-              onClick={loadVehicles}
+              onClick={handleRefreshData}
               title="تحديث البيانات"
               className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
@@ -462,9 +466,7 @@ export default function FleetPage() {
             setEditingVehicle(null);
           }}
           vehicle={editingVehicle}
-          onSuccess={() => {
-            loadVehicles();
-          }}
+          onSuccess={handleRefreshData}
         />
       )}
 
@@ -473,7 +475,7 @@ export default function FleetPage() {
           isOpen={isQuickEntryOpen}
           onClose={() => setIsQuickEntryOpen(false)}
           vehicles={vehicles}
-          onOperationSuccess={loadVehicles}
+          onOperationSuccess={handleRefreshData}
         />
       )}
 
@@ -482,7 +484,7 @@ export default function FleetPage() {
           isOpen={isImportExportOpen}
           onClose={() => setIsImportExportOpen(false)}
           vehicles={vehicles}
-          onImportSuccess={loadVehicles}
+          onImportSuccess={handleRefreshData}
         />
       )}
 
@@ -494,7 +496,7 @@ export default function FleetPage() {
           vehicles={vehicles}
           defaultVehicleId={quickFuelVehicleId}
           onSuccess={() => {
-            loadVehicles();
+            handleRefreshData();
             setQuickFuelVehicleId(null);
           }}
         />
@@ -508,7 +510,7 @@ export default function FleetPage() {
           vehicles={vehicles}
           defaultVehicleId={quickMaintVehicleId}
           onSuccess={() => {
-            loadVehicles();
+            handleRefreshData();
             setQuickMaintVehicleId(null);
           }}
         />
