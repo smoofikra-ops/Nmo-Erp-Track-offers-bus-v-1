@@ -1,5 +1,5 @@
 import { employeeService } from './employeeService';
-import { commissionService } from './commissionService';
+import { commissionService, normalizeCommissionRecords } from './commissionService';
 import { fleetService, generateUniqueEntityId } from './fleetService';
 import { productService } from './productService';
 import { quoteService } from './quoteService';
@@ -668,7 +668,7 @@ class AIAssistantService {
       }
 
       const employees: Employee[] = empRes.data || [];
-      const records: any[] = commRes.data || [];
+      const records: any[] = normalizeCommissionRecords(commRes);
 
       if (!records.length) {
         return {

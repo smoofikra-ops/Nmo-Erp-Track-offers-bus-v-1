@@ -2,7 +2,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { commissionService } from '@/services/commissionService';
+import { commissionService, normalizeCommissionRecords } from '@/services/commissionService';
 import { CommissionRecord, CommissionTypeCategory } from '@/types/commissions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertTriangle, TrendingUp, Users, Wallet, CreditCard, Banknote, Filter, Calendar as CalendarIcon, ChevronDown, ChevronUp, Package, Lock, Truck, Gauge, Wrench, ArrowUpRight, RefreshCw } from 'lucide-react';
@@ -49,7 +49,7 @@ export function Dashboard() {
     enabled: Boolean(companyId),
   });
 
-  const records: CommissionRecord[] = useMemo(() => recordsRes?.data || [], [recordsRes]);
+  const records: CommissionRecord[] = useMemo(() => normalizeCommissionRecords(recordsRes), [recordsRes]);
   const fleetKpis = fleetKpisRes?.data;
 
   // Filters State

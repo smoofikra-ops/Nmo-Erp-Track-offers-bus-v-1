@@ -90,7 +90,7 @@ export function Sidebar() {
     {
       to: "/fleet",
       icon: Truck,
-      label: t("modules.fleet", "المركبات"),
+      label: t("modules.fleet", "الباصات والأسطول"),
       exact: false,
     },
     {

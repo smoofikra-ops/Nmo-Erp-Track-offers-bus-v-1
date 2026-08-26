@@ -8,7 +8,7 @@ import { useSettings } from '@/contexts/SettingsContext';
 import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import { hasPermission, RolePermissions } from '@/utils/permissions';
 import { CommissionRecord } from '@/types/commissions';
-import { commissionService } from '@/services/commissionService';
+import { commissionService, normalizeCommissionRecords } from '@/services/commissionService';
 import { archiveService } from '@/services/archiveService';
 import { PrintableCommissionSummary } from '@/components/commissions/PrintableCommissionSummary';
 import { EditCommissionRecordModal } from '@/components/commissions/EditCommissionRecordModal';
@@ -16,7 +16,7 @@ import { archiveDb } from '@/db/archiveDb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
-import { ArrowLeft, Search, TrendingUp, CreditCard, Package, Filter, Eye, Printer, Trash2, Calendar, Lock, Plus, FileText, Edit2, History } from 'lucide-react';
+import { ArrowLeft, Search, TrendingUp, CreditCard, Package, Filter, Eye, Printer, Trash2, Calendar, Lock, Plus, FileText, Edit2, History, AlertTriangle, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 
@@ -70,14 +70,22 @@ export function CommissionRecords() {
   const companyId = user?.currentCompanyId || 'COM-0001';
   const canViewFinancials = user ? (hasPermission(user.role, RolePermissions.CAN_VIEW_FINANCIAL_SUMMARY) || financialAccessGranted) : false;
 
-  const { data: allRecords = [] as CommissionRecord[], isLoading: recordsLoading } = useQuery<CommissionRecord[]>({
+  const { 
+    data: queryResponse, 
+    isLoading: recordsLoading, 
+    isError, 
+    error: queryError, 
+    refetch 
+  } = useQuery({
     queryKey: ['commissionRecords', companyId],
-    queryFn: async () => {
-      const response = await commissionService.getCommissionRecords(companyId);
-      return (response.data || []) as CommissionRecord[];
-    },
+    queryFn: () => commissionService.getCommissionRecords(companyId),
     staleTime: 1000 * 60 * 3,
+    retry: 2,
   });
+
+  const allRecords: CommissionRecord[] = useMemo(() => {
+    return normalizeCommissionRecords(queryResponse);
+  }, [queryResponse]);
 
   
   const updateMutation = useMutation({
@@ -225,8 +233,23 @@ export function CommissionRecords() {
 
   if (recordsLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[60vh]">
+      <div className="flex flex-col justify-center items-center min-h-[60vh] gap-3" dir="rtl">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+        <p className="text-sm text-slate-500">جاري تحميل سجلات العمولات...</p>
+      </div>
+    );
+  }
+
+  if (isError && allRecords.length === 0) {
+    return (
+      <div className="p-8 text-center max-w-md mx-auto my-12 bg-red-50 border border-red-200 rounded-xl space-y-4" dir="rtl">
+        <AlertTriangle className="h-10 w-10 text-red-500 mx-auto" />
+        <h3 className="text-base font-bold text-red-900">تعذر تحميل سجل العمولات</h3>
+        <p className="text-xs text-red-700">حدث خطأ أثناء الاتصال بالخادم لجلب بيانات العمولات. يمكنك المحاولة مرة أخرى.</p>
+        <Button onClick={() => refetch()} variant="outline" className="gap-2 border-red-300 text-red-800 hover:bg-red-100">
+          <RefreshCw className="h-4 w-4" />
+          <span>إعادة المحاولة</span>
+        </Button>
       </div>
     );
   }

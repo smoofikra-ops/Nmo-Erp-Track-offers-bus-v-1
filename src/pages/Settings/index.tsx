@@ -29,16 +29,18 @@ import { InventoryTab } from "./Tabs/InventoryTab";
 import { CommissionTab } from "./Tabs/CommissionTab";
 import { UsersTab } from "./Tabs/UsersTab";
 import { ArchiveCenterTab } from "./Tabs/ArchiveCenterTab";
-import { Archive, Truck } from "lucide-react";
+import { Archive, Truck, Wrench } from "lucide-react";
 import { BackupTab } from "./Tabs/BackupTab";
 import { FleetSettingsTab } from "./Tabs/FleetSettingsTab";
+import { BusCatalogSettingsTab } from "./Tabs/BusCatalogSettingsTab";
 import { SystemHealth } from "./SystemHealth";
 
 const tabs = [
   { id: "company", label: "معلومات المؤسسة", icon: Building2 },
   { id: "branding", label: "الهوية البصرية", icon: Palette },
   { id: "system", label: "إعدادات النظام", icon: Sliders },
-  { id: "fleet", label: "إعدادات الأسطول والمركبات", icon: Truck },
+  { id: "fleet", label: "إعدادات الأسطول والباصات", icon: Truck },
+  { id: "busCatalog", label: "دليل عمليات وصيانة الباصات", icon: Wrench },
   { id: "printing", label: "إعدادات الطباعة", icon: Printer },
   { id: "inventory", label: "إعدادات المخزون", icon: Package },
   { id: "commission", label: "إعدادات العمولات", icon: Percent },
@@ -128,6 +130,8 @@ export function Settings() {
         return <SystemTab settings={localSettings} onChange={handleChange} />;
       case "fleet":
         return <FleetSettingsTab settings={localSettings} onChange={handleChange} />;
+      case "busCatalog":
+        return <BusCatalogSettingsTab />;
       case "printing":
         return <PrintingTab settings={localSettings} onChange={handleChange} />;
       case "inventory":

@@ -2,7 +2,8 @@ import { ApiClient } from './apiClient';
 import { ApiResponse } from '@/types';
 import { CommissionRecord } from '@/types/commissions';
 
-const STORAGE_KEY = 'erp_commission_records_cache';
+const STORAGE_KEY = 'erp_commission_records_cache_v2';
+const LEGACY_STORAGE_KEY = 'erp_commission_records_cache';
 const SETTINGS_KEY = 'erp_commission_settings_cache';
 
 const defaultCommissionRecords: CommissionRecord[] = [
@@ -96,28 +97,158 @@ const defaultCommissionRecords: CommissionRecord[] = [
   }
 ];
 
+/**
+ * Normalizes any commission data structure (ApiResponse, raw array, nested objects, stringified JSON)
+ * into a strictly typed and validated CommissionRecord[] array.
+ */
+export function normalizeCommissionRecords(rawInput: any): CommissionRecord[] {
+  if (!rawInput) return [];
+
+  let candidates: any = rawInput;
+
+  // 1. If string, attempt JSON parse
+  if (typeof candidates === 'string') {
+    const trimmed = candidates.trim();
+    if (!trimmed) return [];
+    try {
+      candidates = JSON.parse(trimmed);
+    } catch {
+      return [];
+    }
+  }
+
+  // 2. If wrapped in an ApiResponse object: e.g. { success: true, data: [...] }
+  if (candidates && typeof candidates === 'object' && !Array.isArray(candidates)) {
+    if (candidates.data !== undefined) {
+      candidates = candidates.data;
+      if (typeof candidates === 'string') {
+        try {
+          candidates = JSON.parse(candidates);
+        } catch {
+          candidates = [];
+        }
+      }
+      if (candidates && typeof candidates === 'object' && !Array.isArray(candidates)) {
+        if (Array.isArray(candidates.records)) {
+          candidates = candidates.records;
+        } else if (Array.isArray(candidates.CommissionRecords)) {
+          candidates = candidates.CommissionRecords;
+        } else if (Array.isArray(candidates.items)) {
+          candidates = candidates.items;
+        }
+      }
+    } else if (Array.isArray(candidates.records)) {
+      candidates = candidates.records;
+    } else if (Array.isArray(candidates.CommissionRecords)) {
+      candidates = candidates.CommissionRecords;
+    } else if (Array.isArray(candidates.items)) {
+      candidates = candidates.items;
+    } else {
+      // Single record object check
+      if (candidates.id && (candidates.transactionNo || candidates.employeeName || candidates.netCommission !== undefined)) {
+        candidates = [candidates];
+      } else {
+        return [];
+      }
+    }
+  }
+
+  if (!Array.isArray(candidates)) {
+    return [];
+  }
+
+  const parseArrayField = (val: any) => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string' && val.trim()) {
+      try {
+        const p = JSON.parse(val);
+        if (Array.isArray(p)) return p;
+      } catch {}
+    }
+    return [];
+  };
+
+  return candidates
+    .filter((r: any) => r && typeof r === 'object' && !r.IsDeleted)
+    .map((r: any, idx: number): CommissionRecord => {
+      const id = String(r.id || r.ID || r.RecordID || `REC-${Date.now()}-${idx}`);
+      const gross = Number(r.grossCommission || r.GrossCommission || r.totalCommission || 0) || 0;
+      const discount = Number(r.totalDiscount || r.totalDiscounts || r.TotalDiscount || r.discount || 0) || 0;
+      const net = Number(r.netCommission || r.NetCommission || r.netAmount || (gross - discount)) || 0;
+
+      return {
+        id,
+        transactionNo: String(r.transactionNo || r.TransactionNo || r.trxNo || `COM-${id}`),
+        companyId: String(r.companyId || r.CompanyID || 'COM-0001'),
+        createdAt: String(r.createdAt || r.CreatedAt || r.timestamp || new Date().toISOString()),
+        formattedDate: String(r.formattedDate || r.FormattedDate || r.date || (r.createdAt ? String(r.createdAt).slice(0, 16).replace('T', ' ') : '')),
+        employeeId: String(r.employeeId || r.EmployeeID || r.empId || ''),
+        employeeName: String(r.employeeName || r.EmployeeName || r.name || 'موظف غير محدد'),
+        employeeCode: String(r.employeeCode || r.EmployeeCode || r.code || ''),
+        commissionType: (r.commissionType || r.CommissionType || 'PRODUCT_COMMISSION') as any,
+        commissionTypeLabel: String(r.commissionTypeLabel || r.CommissionTypeLabel || (r.commissionType === 'ORDER_COUNT_COMMISSION' ? 'عمولة عدد الطلبات' : 'عمولة منتجات')),
+        quantityOrOrdersCount: Number(r.quantityOrOrdersCount || r.QuantityOrOrdersCount || r.ordersCount || r.quantity || 0) || 0,
+        grossCommission: gross,
+        totalDiscount: discount,
+        netCommission: net,
+        totalOrderValue: Number(r.totalOrderValue || r.TotalOrderValue || 0) || 0,
+        totalRequiredAmount: Number(r.totalRequiredAmount || r.TotalRequiredAmount || 0) || 0,
+        onlinePaidAmount: Number(r.onlinePaidAmount || r.OnlinePaidAmount || 0) || 0,
+        codRequiredAmount: Number(r.codRequiredAmount || r.CodRequiredAmount || 0) || 0,
+        totalDiscounts: discount,
+        finalRequiredAmount: Number(r.finalRequiredAmount || r.FinalRequiredAmount || 0) || 0,
+        remainingBalance: Number(r.remainingBalance || r.RemainingBalance || 0) || 0,
+        notes: String(r.notes || r.Notes || ''),
+        items: parseArrayField(r.items || r.Items),
+        discounts: parseArrayField(r.discounts || r.Discounts),
+        requiredItems: parseArrayField(r.requiredItems || r.RequiredItems),
+        paymentItems: parseArrayField(r.paymentItems || r.PaymentItems),
+        revisions: parseArrayField(r.revisions || r.Revisions),
+        auditLogs: parseArrayField(r.auditLogs || r.AuditLogs),
+        orderCountDetails: typeof r.orderCountDetails === 'string' ? (() => { try { return JSON.parse(r.orderCountDetails); } catch { return undefined; } })() : r.orderCountDetails,
+        version: Number(r.version || 1) || 1,
+        IsDeleted: Boolean(r.IsDeleted),
+      };
+    });
+}
+
 function getStoredRecords(): CommissionRecord[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    // Check v2 cache first
+    const rawV2 = localStorage.getItem(STORAGE_KEY);
+    if (rawV2) {
+      const normalized = normalizeCommissionRecords(rawV2);
+      if (normalized.length > 0) return normalized;
+    }
+
+    // Check and migrate legacy cache if present
+    const rawLegacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (rawLegacy) {
+      const normalized = normalizeCommissionRecords(rawLegacy);
+      if (normalized.length > 0) {
+        setStoredRecords(normalized);
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
+        return normalized;
+      }
     }
   } catch (e) {
-    // Ignore
+    // Ignore storage parse errors
   }
   return defaultCommissionRecords;
 }
 
 function setStoredRecords(records: CommissionRecord[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    const clean = normalizeCommissionRecords(records);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
   } catch (e) {
-    // Ignore
+    // Ignore storage write errors
   }
 }
 
 export const commissionService = {
+  normalizeCommissionRecords,
+
   getSettings: async (companyId: string = 'COM-0001'): Promise<ApiResponse<any>> => {
     try {
       const res = await ApiClient.post('GET_COMMISSION_SETTINGS', { CompanyID: companyId });
@@ -192,12 +323,45 @@ export const commissionService = {
 
   getCommissionRecords: async (companyId: string = 'COM-0001'): Promise<ApiResponse<CommissionRecord[]>> => {
     try {
-      const res = await ApiClient.post<CommissionRecord[]>('GET_COMMISSION_RECORDS', { CompanyID: companyId });
-      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setStoredRecords(res.data);
-        return res;
+      const res = await ApiClient.post<any>('GET_COMMISSION_RECORDS', { CompanyID: companyId });
+      const normalized = normalizeCommissionRecords(res);
+
+      if ((import.meta as any).env?.DEV) {
+        console.debug('[CommissionService] GET_COMMISSION_RECORDS diagnostics:', {
+          action: 'GET_COMMISSION_RECORDS',
+          success: res?.success,
+          typeofData: typeof res?.data,
+          isArrayData: Array.isArray(res?.data),
+          keys: res?.data && typeof res?.data === 'object' ? Object.keys(res.data) : [],
+          recordCount: normalized.length
+        });
       }
-    } catch (e) {}
+
+      if (res && res.success) {
+        setStoredRecords(normalized);
+        return {
+          success: true,
+          data: normalized,
+          message: res.message || 'تم استرجاع سجلات العمولات بنجاح',
+          timestamp: res.timestamp || new Date().toISOString()
+        };
+      }
+
+      if (res && !res.success && res.error) {
+        const cached = getStoredRecords().filter(r => !r.companyId || r.companyId === companyId);
+        return {
+          success: false,
+          data: cached,
+          message: res.message || 'تعذر جلب سجلات العمولات من الخادم',
+          error: res.error,
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (e: any) {
+      if ((import.meta as any).env?.DEV) {
+        console.warn('[CommissionService] GET_COMMISSION_RECORDS error, falling back to cache:', e);
+      }
+    }
 
     const cached = getStoredRecords().filter(r => !r.companyId || r.companyId === companyId);
     return {

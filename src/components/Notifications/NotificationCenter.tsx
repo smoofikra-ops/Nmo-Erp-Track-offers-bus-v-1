@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Bell, ShieldAlert, AlertTriangle, Package, DollarSign, Truck, Check, ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { fleetService } from '../../services/fleetService';
-import { commissionService } from '../../services/commissionService';
+import { commissionService, normalizeCommissionRecords } from '../../services/commissionService';
 import { productService } from '../../services/productService';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -82,7 +82,7 @@ export const NotificationCenter: React.FC = () => {
     });
 
     // 2. Commissions Due Alerts
-    const records = commRes?.data || [];
+    const records = normalizeCommissionRecords(commRes);
     const pendingRecords = records.filter((c: any) => {
       const total = Number(c.totalCommission) || Number(c.netAmount) || Number(c.amount) || 0;
       const paid = Number(c.paidAmount) || 0;

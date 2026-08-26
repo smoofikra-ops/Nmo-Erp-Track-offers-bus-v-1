@@ -3,24 +3,31 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Vehicle, OperationalStatus, VehicleType } from '@/types/fleet';
 import { fleetService } from '@/services/fleetService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import { VehicleCard } from './components/VehicleCard';
 import { VehicleTable } from './components/VehicleTable';
 import { VehicleDetails } from './VehicleDetails';
 import { VehicleModal } from './components/VehicleModal';
-import { QuickEntryModal } from './components/QuickEntryModal';
+import { BusQuickEntryModal } from './components/BusQuickEntryModal';
+import { BusServiceLogsList } from './components/BusServiceLogsList';
 import { AddFuelModal } from './components/AddFuelModal';
 import { AddMaintenanceModal } from './components/AddMaintenanceModal';
 import { ImportExportModal } from './components/ImportExportModal';
 import { 
   Truck, Plus, Zap, FileSpreadsheet, Search, Filter, 
   LayoutGrid, List, Gauge, Wrench, ShieldAlert, 
-  TrendingUp, RefreshCw, AlertTriangle, CheckCircle, ArrowUpDown, Trash2, Upload
+  TrendingUp, RefreshCw, AlertTriangle, CheckCircle, ArrowUpDown, Trash2, Upload,
+  Layers, History
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function FleetPage() {
   const { user } = useAuth();
+  const { requireAdminAuth } = useAdminAuth();
   const companyId = user?.currentCompanyId || 'COM-0001';
   const queryClient = useQueryClient();
+
+  const [activeMainTab, setActiveMainTab] = useState<'BUSES' | 'LOGS'>('BUSES');
 
   const {
     data: vehiclesRes,
@@ -48,6 +55,7 @@ export default function FleetPage() {
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [isQuickEntryOpen, setIsQuickEntryOpen] = useState(false);
+  const [quickEntryVehicleId, setQuickEntryVehicleId] = useState<string | null>(null);
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
   
@@ -57,9 +65,20 @@ export default function FleetPage() {
 
   // Delete/Archive Confirmation
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
-  const [archiveReason, setArchiveReason] = useState('بيع المركبة أو خروجها من الخدمة');
+  const [archiveReason, setArchiveReason] = useState('بيع الباص أو خروجه من الخدمة');
   const [isArchiving, setIsArchiving] = useState(false);
   const [archiveError, setArchiveError] = useState('');
+
+  const handleOpenClearFleet = () => {
+    // Strict Admin authorization check
+    if (user?.role !== 'ADMIN') {
+      toast.error('هذا الإجراء مقصور على مدراء النظام فقط.');
+      return;
+    }
+    requireAdminAuth('تفريغ كافة بيانات أسطول الباصات وحذفها نهائياً', () => {
+      setIsClearAllModalOpen(true);
+    });
+  };
 
   const handleClearAllVehicles = async () => {
     try {
@@ -68,8 +87,10 @@ export default function FleetPage() {
       queryClient.invalidateQueries({ queryKey: ['vehicles', companyId] });
       queryClient.invalidateQueries({ queryKey: ['fleetKPIs', companyId] });
       setIsClearAllModalOpen(false);
+      toast.success('تم تفريغ بيانات الأسطول بنجاح');
     } catch (err) {
       console.error('Failed to clear fleet vehicles:', err);
+      toast.error('حدث خطأ أثناء تفريغ الأسطول');
     }
   };
 
@@ -165,21 +186,21 @@ export default function FleetPage() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              إدارة المركبات والأسطول
+              إدارة أسطول الباصات والعمليات
             </h1>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              متابعة حركة المركبات، الوقود، الصيانة الدورية، التراخيص، ومؤشر الجاهزية التشغيلية
+              متابعة حركة الباصات، الإدخال السريع للوقود والصيانة، أرشفة الفواتير في Google Drive، ومؤشرات الجاهزية
             </p>
           </div>
         </div>
 
         {/* Primary Action Buttons */}
         <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
-          {vehicles.length > 0 && (
+          {vehicles.length > 0 && user?.role === 'ADMIN' && (
             <button
-              onClick={() => setIsClearAllModalOpen(true)}
+              onClick={handleOpenClearFleet}
               className="px-3.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 text-xs font-bold hover:bg-rose-100/80 shadow-2xs flex items-center gap-1.5 transition-colors"
-              title="حذف وتفريغ كافة المركبات الحالية لرفع الأسطول الفعلي"
+              title="حذف وتفريغ كافة بيانات الباصات الحالية (يتطلب صلاحية مدير النظام)"
             >
               <Trash2 className="w-4 h-4" />
               تفريغ الأسطول
@@ -195,11 +216,14 @@ export default function FleetPage() {
           </button>
           
           <button
-            onClick={() => setIsQuickEntryOpen(true)}
+            onClick={() => {
+              setQuickEntryVehicleId(null);
+              setIsQuickEntryOpen(true);
+            }}
             className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition-all"
           >
             <Zap className="w-4 h-4" />
-            الإدخال السريع
+            الإدخال السريع للباصات
           </button>
 
           <button
@@ -210,10 +234,46 @@ export default function FleetPage() {
             className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all"
           >
             <Plus className="w-4 h-4" />
-            إضافة مركبة جديدة
+            إضافة باص جديد
           </button>
         </div>
       </div>
+
+      {/* Main Tab Switcher */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl w-fit">
+        <button
+          onClick={() => setActiveMainTab('BUSES')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            activeMainTab === 'BUSES'
+              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Truck className="w-4 h-4" />
+          أسطول الباصات ({vehicles.length})
+        </button>
+
+        <button
+          onClick={() => setActiveMainTab('LOGS')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            activeMainTab === 'LOGS'
+              ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          سجل العمليات وفواتير Drive
+        </button>
+      </div>
+
+      {activeMainTab === 'LOGS' ? (
+        <BusServiceLogsList
+          companyId={companyId}
+          vehicles={vehicles}
+          onRefreshNeeded={handleRefreshData}
+        />
+      ) : (
+        <>
 
       {/* KPI Stats Ribbon */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
@@ -456,6 +516,8 @@ export default function FleetPage() {
           onQuickMaint={(id) => setQuickMaintVehicleId(id)}
         />
       )}
+      </>
+      )}
 
       {/* Central Modals */}
       {isVehicleModalOpen && (
@@ -471,11 +533,15 @@ export default function FleetPage() {
       )}
 
       {isQuickEntryOpen && (
-        <QuickEntryModal
+        <BusQuickEntryModal
           isOpen={isQuickEntryOpen}
-          onClose={() => setIsQuickEntryOpen(false)}
+          onClose={() => {
+            setIsQuickEntryOpen(false);
+            setQuickEntryVehicleId(null);
+          }}
           vehicles={vehicles}
-          onOperationSuccess={handleRefreshData}
+          defaultVehicleId={quickEntryVehicleId || undefined}
+          onSuccess={handleRefreshData}
         />
       )}
 
