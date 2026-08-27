@@ -8,10 +8,10 @@ import './index.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 3, // 3 minutes default freshness (render cached immediately)
-      gcTime: 1000 * 60 * 20,    // 20 minutes in-memory retention
+      staleTime: 0, // Always fresh from Google Sheets; in-flight deduplication in apiClient prevents redundant calls
+      gcTime: 1000 * 60 * 5,
       refetchOnWindowFocus: false,
-      refetchOnMount: true,      // Stale-while-revalidate background refresh
+      refetchOnMount: true,
       retry: 1,
       retryDelay: 1000,
     },

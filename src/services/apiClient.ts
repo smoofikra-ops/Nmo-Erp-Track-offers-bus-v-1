@@ -25,24 +25,40 @@ const inFlightRequests = new Map<string, Promise<ApiResponse<any>>>();
 export class ApiClient {
   private static getDedupKey(action: string, payload: any): string {
     try {
-      return `${action}:${JSON.stringify(payload || {})}`;
+      if (!payload || typeof payload !== 'object') {
+        return `${action.toUpperCase()}:${String(payload || '')}`;
+      }
+      // Normalize CompanyID / companyId
+      const normalized: Record<string, any> = {};
+      const sortedKeys = Object.keys(payload).sort();
+      for (const k of sortedKeys) {
+        const lowerKey = k.toLowerCase() === 'companyid' ? 'companyId' : k;
+        normalized[lowerKey] = payload[k];
+      }
+      return `${action.toUpperCase()}:${JSON.stringify(normalized)}`;
     } catch {
-      return `${action}:${String(payload)}`;
+      return `${action.toUpperCase()}:${String(payload)}`;
     }
   }
 
   private static isReadAction(action: string): boolean {
     const act = action.toUpperCase();
-    return act.startsWith('GET_') || act === 'GET_OFFERS' || act === 'GET_OFFER' || act === 'GET_SYSTEM_HEALTH';
+    return (
+      act.startsWith('GET_') ||
+      act === 'GET_OFFERS' ||
+      act === 'GET_OFFER' ||
+      act === 'GET_SYSTEM_HEALTH' ||
+      act === 'GET_NOTIFICATION_SUMMARY' ||
+      act === 'GET_FLEET_KPIS'
+    );
   }
 
-  private static async executeRequest<T>(
+  private static async executeSingleRequest<T>(
     action: string,
     payload: any = {},
     options: ApiRequestOptions = {}
   ): Promise<ApiResponse<T>> {
     const startTime = performance.now();
-    const companyId = payload?.CompanyID || payload?.companyId || "COM-0001";
     const timeoutMs = options.timeoutMs || 25000;
     const currentUrl = getGasUrl();
 
@@ -116,7 +132,15 @@ export class ApiClient {
 
       if ((import.meta as any).env?.DEV) {
         const payloadSizeKb = (rawText.length / 1024).toFixed(1);
-        console.debug(`[API Perf] ${action} | ${durationMs}ms | ${payloadSizeKb} KB | HTTP ${response.status}`);
+        const gasDiag = parsedJson?.diagnostics || parsedJson?._diagnostics;
+        if (gasDiag) {
+          console.debug(
+            `[API Perf & GAS Diag] ${action} | Front: ${durationMs}ms | Size: ${payloadSizeKb} KB | GAS Total: ${gasDiag.totalExecutionMs || gasDiag.TOTAL || 'N/A'}ms`,
+            gasDiag
+          );
+        } else {
+          console.debug(`[API Perf] ${action} | ${durationMs}ms | ${payloadSizeKb} KB | HTTP ${response.status}`);
+        }
       }
 
       return parsedJson as ApiResponse<T>;
@@ -145,6 +169,41 @@ export class ApiClient {
     }
   }
 
+  private static async executeRequestWithRetry<T>(
+    action: string,
+    payload: any = {},
+    options: ApiRequestOptions = {}
+  ): Promise<ApiResponse<T>> {
+    const isRead = this.isReadAction(action);
+    const maxRetries = options.retries !== undefined ? options.retries : (isRead ? 1 : 0);
+
+    let attempt = 0;
+    let res = await this.executeSingleRequest<T>(action, payload, options);
+
+    while (!res.success && attempt < maxRetries) {
+      const isRetryable =
+        res.error?.code === 'TIMEOUT_ERROR' ||
+        res.error?.code === 'NETWORK_ERROR' ||
+        res.error?.code === 'JSON_PARSE_ERROR';
+
+      if (!isRetryable) break;
+
+      attempt++;
+      // Controlled jittered delay: 1500ms + random 0-1000ms
+      const backoffMs = 1500 + Math.floor(Math.random() * 1000);
+      console.warn(`[API Smart Retry] Retrying ${action} (attempt ${attempt}/${maxRetries}) after ${backoffMs}ms delay...`);
+      await new Promise((r) => setTimeout(r, backoffMs));
+
+      res = await this.executeSingleRequest<T>(action, payload, options);
+      if (res.success) {
+        console.info(`[API Smart Retry] ${action} succeeded on retry attempt ${attempt}.`);
+        break;
+      }
+    }
+
+    return res;
+  }
+
   private static async request<T>(
     action: string,
     payload: any = {},
@@ -155,12 +214,12 @@ export class ApiClient {
 
     if (dedupKey && inFlightRequests.has(dedupKey)) {
       if ((import.meta as any).env?.DEV) {
-        console.debug(`[API Dedup] Reusing in-flight request for: ${action}`);
+        console.debug(`[API Dedup] Reusing active in-flight request for: ${dedupKey}`);
       }
       return inFlightRequests.get(dedupKey) as Promise<ApiResponse<T>>;
     }
 
-    const requestPromise = this.executeRequest<T>(action, payload, options).finally(() => {
+    const requestPromise = this.executeRequestWithRetry<T>(action, payload, options).finally(() => {
       if (dedupKey) {
         inFlightRequests.delete(dedupKey);
       }

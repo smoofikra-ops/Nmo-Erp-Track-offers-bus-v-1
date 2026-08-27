@@ -11,7 +11,7 @@ import {
   ArrowRight,
   ShieldCheck
 } from 'lucide-react';
-import { settingsService } from '@/services/settingsService';
+import { useSettings } from '@/contexts/SettingsContext';
 import { Spatial3DCanvas } from '@/components/auth/Spatial3DCanvas';
 
 export function Login() {
@@ -20,19 +20,11 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string>('');
+  const { settings } = useSettings();
+  const logoUrl = settings?.LogoURL || '';
 
   const { login } = useAuth();
   const navigate = useNavigate();
-
-  // Load custom logo if configured in system settings
-  useEffect(() => {
-    settingsService.getSettings().then((res) => {
-      if (res.success && res.data?.settings?.LogoURL) {
-        setLogoUrl(res.data.settings.LogoURL);
-      }
-    }).catch(() => {});
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

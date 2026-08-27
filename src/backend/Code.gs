@@ -173,18 +173,22 @@ function getTimestamp() {
   return new Date().toISOString();
 }
 
-function responseOk(data, message = "Success") {
-  return ContentService.createTextOutput(JSON.stringify({
+function responseOk(data, message = "Success", diagnostics = null) {
+  const output = {
     success: true,
     data: data,
     message: message,
     error: null,
     timestamp: getTimestamp()
-  })).setMimeType(ContentService.MimeType.JSON);
+  };
+  if (diagnostics) {
+    output._diagnostics = diagnostics;
+  }
+  return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function responseError(message, code = "ERROR", details = "") {
-  return ContentService.createTextOutput(JSON.stringify({
+function responseError(message, code = "ERROR", details = "", diagnostics = null) {
+  const output = {
     success: false,
     data: null,
     message: message,
@@ -193,45 +197,32 @@ function responseError(message, code = "ERROR", details = "") {
       details: details
     },
     timestamp: getTimestamp()
-  })).setMimeType(ContentService.MimeType.JSON);
+  };
+  if (diagnostics) {
+    output._diagnostics = diagnostics;
+  }
+  return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// --- CACHE SERVICE FOR ULTRA-FAST READS ---
-const ServerCache = {
-  get: function(key) {
-    try {
-      const cache = CacheService.getScriptCache();
-      const val = cache.get(key);
-      return val ? JSON.parse(val) : null;
-    } catch(e) {
-      return null;
-    }
-  },
-  put: function(key, data, ttlSeconds) {
-    try {
-      if (!ttlSeconds) ttlSeconds = 300; // 5 min default
-      const cache = CacheService.getScriptCache();
-      const str = JSON.stringify(data);
-      if (str.length < 90000) {
-        cache.put(key, str, ttlSeconds);
-      }
-    } catch(e) {}
-  },
-  invalidate: function(keys) {
-    try {
-      const cache = CacheService.getScriptCache();
-      if (Array.isArray(keys)) {
-        cache.removeAll(keys);
-      } else if (typeof keys === 'string') {
-        cache.remove(keys);
-      }
-    } catch(e) {}
+// Global reference cache per execution context (cleared automatically after each GAS request)
+let _globalActiveSpreadsheet = null;
+function getActiveSS() {
+  if (!_globalActiveSpreadsheet) {
+    _globalActiveSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   }
+  return _globalActiveSpreadsheet;
+}
+
+// --- CACHE SERVICE (UNUSED FOR BUSINESS DATASETS AS PER ZERO-CACHE REQUIREMENT) ---
+const ServerCache = {
+  get: function(key) { return null; },
+  put: function(key, data, ttlSeconds) {},
+  invalidate: function(keys) {}
 };
 
 // --- CORE DB FUNCTIONS ---
 function resolveSheet(ss, tableName) {
-  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) ss = getActiveSS();
   let sheet = ss.getSheetByName(tableName);
   if (!sheet) {
     if (tableName === 'Vehicles' || tableName === 'Vehicle_Master' || tableName === 'VehicleMaster') {
@@ -242,24 +233,35 @@ function resolveSheet(ss, tableName) {
 }
 
 function getTableData(tableName, filters = {}) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getActiveSS();
   const sheet = resolveSheet(ss, tableName);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
   
-  const headers = data[0];
-  const rows = data.slice(1);
-  
-  const results = rows.map(row => {
-    let obj = {};
-    headers.forEach((header, index) => {
-      const cleanHeader = String(header).trim();
-      obj[cleanHeader] = row[index];
-    });
+  const rawHeaders = data[0];
+  const headerCount = rawHeaders.length;
+  const cleanHeaders = new Array(headerCount);
+  for (let h = 0; h < headerCount; h++) {
+    cleanHeaders[h] = String(rawHeaders[h]).trim();
+  }
 
-    // Normalize field aliases for vehicles
-    if (tableName === 'Vehicles' || tableName === 'Vehicle_Master' || tableName === 'VehicleMaster') {
+  const isVehicleTable = (tableName === 'Vehicles' || tableName === 'Vehicle_Master' || tableName === 'VehicleMaster');
+  const includeDeleted = Boolean(filters.includeDeleted);
+  const filterKeys = Object.keys(filters).filter(k => k !== 'includeDeleted');
+  const filterKeyCount = filterKeys.length;
+
+  const results = [];
+  const rowCount = data.length;
+
+  for (let r = 1; r < rowCount; r++) {
+    const row = data[r];
+    const obj = {};
+    for (let c = 0; c < headerCount; c++) {
+      obj[cleanHeaders[c]] = row[c];
+    }
+
+    if (isVehicleTable) {
       if (obj.VIN_Chassis_Number && !obj.VIN) obj.VIN = obj.VIN_Chassis_Number;
       if (obj.VIN && !obj.VIN_Chassis_Number) obj.VIN_Chassis_Number = obj.VIN;
       if (obj.Manufacturing_Year && !obj.Year) obj.Year = obj.Manufacturing_Year;
@@ -277,18 +279,24 @@ function getTableData(tableName, filters = {}) {
       if (obj.Readiness_Index !== undefined && obj.Readiness_Score === undefined) obj.Readiness_Score = obj.Readiness_Index;
       if (obj.Readiness_Score !== undefined && obj.Readiness_Index === undefined) obj.Readiness_Index = obj.Readiness_Score;
     }
-    return obj;
-  });
 
-  return results.filter(row => {
-    const isDel = String(row.IsDeleted).toLowerCase() === 'true' || row.IsDeleted === 1;
-    if (isDel && !filters.includeDeleted) return false;
-    for (let key in filters) {
-      if (key === 'includeDeleted') continue;
-      if (row[key] !== filters[key]) return false;
+    const isDel = String(obj.IsDeleted).toLowerCase() === 'true' || obj.IsDeleted === 1;
+    if (isDel && !includeDeleted) continue;
+
+    let matches = true;
+    for (let k = 0; k < filterKeyCount; k++) {
+      const fk = filterKeys[k];
+      if (obj[fk] !== filters[fk]) {
+        matches = false;
+        break;
+      }
     }
-    return true;
-  });
+    if (matches) {
+      results.push(obj);
+    }
+  }
+
+  return results;
 }
 
 function insertRow(tableName, obj) {
@@ -462,97 +470,282 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  const startTime = new Date().getTime();
+  const perfMetrics = {
+    authMs: 0,
+    handlerMs: 0,
+    totalExecutionMs: 0
+  };
+
   try {
+    const t0 = new Date().getTime();
     const requestData = JSON.parse(e.postData.contents);
     const action = requestData.action;
     const payload = requestData.payload || {};
     const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
     payload.CompanyID = companyId; // Normalize
+    perfMetrics.authMs = new Date().getTime() - t0;
+
+    let resultData = null;
+    const tHandler0 = new Date().getTime();
 
     switch (action) {
-      case 'GET_SYSTEM_HEALTH': return responseOk(getSystemHealth());
-      case 'GET_SETTINGS': return responseOk(getSettings(payload));
-      case 'SAVE_SETTINGS': return responseOk(saveSettings(payload));
-      case 'UPDATE_SETTINGS': return responseOk(saveSettings(payload)); // same implementation as save
-      case 'UPLOAD_LOGO': return responseOk(uploadBase64Image(payload));
-      case 'UPLOAD_SIGNATURE': return responseOk(uploadBase64Image(payload));
-      case 'UPLOAD_STAMP': return responseOk(uploadBase64Image(payload));
-      case 'INITIALIZE_DATABASE': return responseOk(initializeDatabase());
+      case 'GET_SYSTEM_HEALTH': resultData = getSystemHealth(); break;
+      case 'GET_SETTINGS': resultData = getSettings(payload); break;
+      case 'SAVE_SETTINGS': resultData = saveSettings(payload); break;
+      case 'UPDATE_SETTINGS': resultData = saveSettings(payload); break;
+      case 'UPLOAD_LOGO': resultData = uploadBase64Image(payload); break;
+      case 'UPLOAD_SIGNATURE': resultData = uploadBase64Image(payload); break;
+      case 'UPLOAD_STAMP': resultData = uploadBase64Image(payload); break;
+      case 'INITIALIZE_DATABASE': resultData = initializeDatabase(); break;
+
+      // NOTIFICATIONS & DASHBOARD SUMMARIES
+      case 'GET_NOTIFICATION_SUMMARY': resultData = getNotificationSummary(payload); break;
+      case 'GET_FLEET_KPIS': resultData = getFleetKPIs(payload); break;
       
       // EMPLOYEES
-      case 'GET_EMPLOYEES': return responseOk(getTableData('Employees', {CompanyID: payload.CompanyID, includeDeleted: true}));
-      case 'CREATE_EMPLOYEE': return responseOk(createEmployee(payload));
-      case 'UPDATE_EMPLOYEE': return responseOk(updateEmployee(payload));
-      case 'DELETE_EMPLOYEE': return responseOk(deleteEmployee(payload));
-      case 'RESTORE_EMPLOYEE': return responseOk(restoreEmployee(payload));
+      case 'GET_EMPLOYEES': resultData = getTableData('Employees', {CompanyID: payload.CompanyID, includeDeleted: true}); break;
+      case 'CREATE_EMPLOYEE': resultData = createEmployee(payload); break;
+      case 'UPDATE_EMPLOYEE': resultData = updateEmployee(payload); break;
+      case 'DELETE_EMPLOYEE': resultData = deleteEmployee(payload); break;
+      case 'RESTORE_EMPLOYEE': resultData = restoreEmployee(payload); break;
       
       // PRODUCTS
-      case 'GET_PRODUCTS': return responseOk(getTableData('Products', {CompanyID: payload.CompanyID}));
-      case 'SYNC_PRODUCT_IMAGES': return responseOk(syncProductImages(payload));
-      case 'CREATE_PRODUCT': return responseOk(createProduct(payload));
-      case 'UPDATE_PRODUCT': return responseOk(updateProduct(payload));
-      case 'SEED_DEFAULT_PRODUCTS': return responseOk(seedDefaultProducts(payload));
+      case 'GET_PRODUCTS': resultData = getTableData('Products', {CompanyID: payload.CompanyID}); break;
+      case 'SYNC_PRODUCT_IMAGES': resultData = syncProductImages(payload); break;
+      case 'CREATE_PRODUCT': resultData = createProduct(payload); break;
+      case 'UPDATE_PRODUCT': resultData = updateProduct(payload); break;
+      case 'SEED_DEFAULT_PRODUCTS': resultData = seedDefaultProducts(payload); break;
       
       // SETTINGS
-      case 'GET_COMMISSION_SETTINGS': return responseOk(getSettings(payload.CompanyID, 'commissions'));
-      case 'UPDATE_COMMISSION_SETTINGS': return responseOk(updateSettings(payload.CompanyID, payload.settings));
+      case 'GET_COMMISSION_SETTINGS': resultData = getSettings(payload.CompanyID, 'commissions'); break;
+      case 'UPDATE_COMMISSION_SETTINGS': resultData = updateSettings(payload.CompanyID, payload.settings); break;
 
       // COMMISSIONS
-      case 'CREATE_ORDER_COUNT_COMMISSION': return responseOk(createOrderCountCommission(payload));
-      case 'CREATE_PRODUCT_COMMISSION': return responseOk(createProductCommission(payload));
-      case 'GET_MONTHLY_EMPLOYEE_ORDER_TOTAL': return responseOk(getMonthlyEmployeeOrderTotal(payload));
-      case 'GET_COMMISSION_RECEIPTS': return responseOk(getCommissionReceipts(payload));
-      case 'SAVE_COMMISSION_RECORD': return responseOk(saveCommissionRecord(payload));
-      case 'UPDATE_COMMISSION_RECORD': return responseOk(updateCommissionRecord(payload));
-      case 'GET_COMMISSION_RECORDS': return responseOk(getCommissionRecords(payload));
-      case 'DELETE_COMMISSION_RECORD': return responseOk(deleteCommissionRecord(payload));
-      case 'RESTORE_RECORD': return responseOk(restoreRecord(payload));
-
+      case 'CREATE_ORDER_COUNT_COMMISSION': resultData = createOrderCountCommission(payload); break;
+      case 'CREATE_PRODUCT_COMMISSION': resultData = createProductCommission(payload); break;
+      case 'GET_MONTHLY_EMPLOYEE_ORDER_TOTAL': resultData = getMonthlyEmployeeOrderTotal(payload); break;
+      case 'GET_COMMISSION_RECEIPTS': resultData = getCommissionReceipts(payload); break;
+      case 'SAVE_COMMISSION_RECORD': resultData = saveCommissionRecord(payload); break;
+      case 'UPDATE_COMMISSION_RECORD': resultData = updateCommissionRecord(payload); break;
+      case 'GET_COMMISSION_RECORDS': resultData = getCommissionRecords(payload); break;
+      case 'DELETE_COMMISSION_RECORD': resultData = deleteCommissionRecord(payload); break;
+      case 'RESTORE_RECORD': resultData = restoreRecord(payload); break;
 
       // QUOTES
       case 'GET_OFFERS': return handleGetOffers(payload);
       case 'GET_OFFER': return handleGetOffer(payload);
-      case 'GET_QUOTE_CATALOG': return responseOk(getQuoteCatalog(payload));
-      case 'GET_QUOTES': return responseOk(getQuotes(payload));
-      case 'CREATE_QUOTE': return responseOk(createQuote(payload));
-      case 'UPDATE_QUOTE': return responseOk(updateQuote(payload));
-      case 'CHANGE_QUOTE_STATUS': return responseOk(changeQuoteStatus(payload));
+      case 'GET_QUOTE_CATALOG': resultData = getQuoteCatalog(payload); break;
+      case 'GET_QUOTES': resultData = getQuotes(payload); break;
+      case 'CREATE_QUOTE': resultData = createQuote(payload); break;
+      case 'UPDATE_QUOTE': resultData = updateQuote(payload); break;
+      case 'CHANGE_QUOTE_STATUS': resultData = changeQuoteStatus(payload); break;
       case 'CREATE_OFFER': return handleCreateOffer(payload);
       case 'UPDATE_OFFER': return handleUpdateOffer(payload);
       case 'DELETE_OFFER': return handleDeleteOffer(payload);
 
       // FLEET & VEHICLES
-      case 'GET_VEHICLES': return responseOk(handleGetVehicles(payload));
-      case 'GET_VEHICLE_BY_ID': return responseOk(handleGetVehicleById(payload));
-      case 'CREATE_VEHICLE': return responseOk(handleCreateVehicle(payload));
-      case 'UPDATE_VEHICLE': return responseOk(handleUpdateVehicle(payload));
-      case 'DELETE_VEHICLE': return responseOk(handleDeleteVehicle(payload));
-      case 'GET_FUEL_LOGS': return responseOk(handleGetFuelLogs(payload));
-      case 'ADD_FUEL_LOG': return responseOk(handleAddFuelLog(payload));
-      case 'GET_MAINTENANCE_LOGS': return responseOk(handleGetMaintenanceLogs(payload));
-      case 'ADD_MAINTENANCE_LOG': return responseOk(handleAddMaintenanceLog(payload));
-      case 'GET_INSURANCE_LOGS': return responseOk(handleGetInsuranceLogs(payload));
-      case 'ADD_INSURANCE_LOG': return responseOk(handleAddInsuranceLog(payload));
-      case 'GET_COMPLIANCE_LOGS': return responseOk(handleGetComplianceLogs(payload));
-      case 'ADD_COMPLIANCE_LOG': return responseOk(handleAddComplianceLog(payload));
-      case 'GET_ACCIDENT_LOGS': return responseOk(handleGetAccidentLogs(payload));
-      case 'ADD_ACCIDENT_LOG': return responseOk(handleAddAccidentLog(payload));
-      case 'GET_DOCUMENTS': return responseOk(handleGetFleetDocuments(payload));
-      case 'ADD_DOCUMENT': return responseOk(handleAddFleetDocument(payload));
-      case 'IMPORT_VEHICLES_BATCH': return responseOk(handleImportVehiclesBatch(payload));
-      case 'BULK_IMPORT_VEHICLES': return responseOk(handleImportVehiclesBatch(payload));
-      case 'bulkImportVehicles': return responseOk(handleImportVehiclesBatch(payload));
-
+      case 'GET_VEHICLES': resultData = handleGetVehicles(payload); break;
+      case 'GET_VEHICLE_BY_ID': resultData = handleGetVehicleById(payload); break;
+      case 'CREATE_VEHICLE': resultData = handleCreateVehicle(payload); break;
+      case 'UPDATE_VEHICLE': resultData = handleUpdateVehicle(payload); break;
+      case 'DELETE_VEHICLE': resultData = handleDeleteVehicle(payload); break;
+      case 'GET_FUEL_LOGS': resultData = handleGetFuelLogs(payload); break;
+      case 'ADD_FUEL_LOG': resultData = handleAddFuelLog(payload); break;
+      case 'GET_MAINTENANCE_LOGS': resultData = handleGetMaintenanceLogs(payload); break;
+      case 'ADD_MAINTENANCE_LOG': resultData = handleAddMaintenanceLog(payload); break;
+      case 'GET_INSURANCE_LOGS': resultData = handleGetInsuranceLogs(payload); break;
+      case 'ADD_INSURANCE_LOG': resultData = handleAddInsuranceLog(payload); break;
+      case 'GET_COMPLIANCE_LOGS': resultData = handleGetComplianceLogs(payload); break;
+      case 'ADD_COMPLIANCE_LOG': resultData = handleAddComplianceLog(payload); break;
+      case 'GET_ACCIDENT_LOGS': resultData = handleGetAccidentLogs(payload); break;
+      case 'ADD_ACCIDENT_LOG': resultData = handleAddAccidentLog(payload); break;
+      case 'GET_DOCUMENTS': resultData = handleGetFleetDocuments(payload); break;
+      case 'ADD_DOCUMENT': resultData = handleAddFleetDocument(payload); break;
+      case 'IMPORT_VEHICLES_BATCH': resultData = handleImportVehiclesBatch(payload); break;
+      case 'BULK_IMPORT_VEHICLES': resultData = handleImportVehiclesBatch(payload); break;
+      case 'bulkImportVehicles': resultData = handleImportVehiclesBatch(payload); break;
 
       default:
-        return responseError("Unknown action requested", "UNKNOWN_ACTION");
+        perfMetrics.totalExecutionMs = new Date().getTime() - startTime;
+        return responseError("Unknown action requested", "UNKNOWN_ACTION", "", perfMetrics);
     }
+
+    perfMetrics.handlerMs = new Date().getTime() - tHandler0;
+    perfMetrics.totalExecutionMs = new Date().getTime() - startTime;
+
+    return responseOk(resultData, "Success", perfMetrics);
   } catch (error) {
-    return responseError("Server error processing request", "SERVER_ERROR", error.toString() + "\n" + error.stack);
+    perfMetrics.totalExecutionMs = new Date().getTime() - startTime;
+    return responseError("Server error processing request", "SERVER_ERROR", error.toString() + "\n" + error.stack, perfMetrics);
   }
 }
 
 // --- IMPLEMENTATIONS ---
+
+function getNotificationSummary(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  const notifications = [];
+  const now = new Date();
+  
+  // 1. Check Vehicles for insurance expiries and maintenance
+  const vehicles = getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
+  let fleetAlertCount = 0;
+  
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
+    if (v.Insurance_Expiry) {
+      const expDate = new Date(v.Insurance_Expiry);
+      const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+      if (diffDays <= 30) {
+        fleetAlertCount++;
+        notifications.push({
+          id: 'notif-ins-' + (v.Vehicle_ID || ''),
+          title: 'انتهاء تأمين المركبة ' + (v.Plate_Number || ''),
+          description: diffDays < 0 ? ('وثيقة التأمين منتهية منذ ' + Math.abs(diffDays) + ' يوم') : ('ينتهي التأمين خلال ' + diffDays + ' يوم'),
+          module: 'FLEET',
+          priority: diffDays <= 7 ? 'CRITICAL' : 'HIGH',
+          timestamp: 'الآن',
+          linkTo: '/fleet'
+        });
+      }
+    }
+    if (v.Operational_Status === 'IN_MAINTENANCE') {
+      fleetAlertCount++;
+      notifications.push({
+        id: 'notif-mnt-' + (v.Vehicle_ID || ''),
+        title: 'مركبة قيد الصيانة (' + (v.Plate_Number || '') + ')',
+        description: (v.Brand || '') + ' ' + (v.Model || '') + ' - متابعة أمر الصيانة والإصلاح',
+        module: 'FLEET',
+        priority: 'MEDIUM',
+        timestamp: 'مستمر',
+        linkTo: '/fleet'
+      });
+    }
+  }
+
+  // 2. Check Commissions for pending amounts
+  const commissionRecords = getTableData('CommissionRecords', { companyId: companyId });
+  let pendingCount = 0;
+  for (let j = 0; j < commissionRecords.length; j++) {
+    const c = commissionRecords[j];
+    const total = Number(c.grossCommission) || Number(c.netCommission) || 0;
+    const paid = Number(c.onlinePaidAmount) || 0;
+    if (total > paid && total > 0) {
+      pendingCount++;
+    }
+  }
+  if (pendingCount > 0) {
+    notifications.push({
+      id: 'notif-comm-pending',
+      title: 'مستحقات عمولات معلقة (' + pendingCount + ' حركة)',
+      description: 'توجد مبالغ عمولات مستحقة لم يتم استكمال صرفها بالكامل',
+      module: 'COMMISSIONS',
+      priority: 'HIGH',
+      timestamp: 'اليوم',
+      linkTo: '/commission'
+    });
+  }
+
+  // 3. Check Products for low stock
+  const products = getTableData('Products', { CompanyID: companyId });
+  let critProdCount = 0;
+  for (let k = 0; k < products.length; k++) {
+    const p = products[k];
+    const qty = Number(p.AvailableQuantity) || 0;
+    if (qty <= 5) critProdCount++;
+  }
+  if (critProdCount > 0) {
+    notifications.push({
+      id: 'notif-prod-crit',
+      title: 'مخزون حرج (' + critProdCount + ' صنف)',
+      description: 'بعض المنتجات وصلت للحد الأدنى في المستودع وتتطلب إعادة طلب',
+      module: 'INVENTORY',
+      priority: 'CRITICAL',
+      timestamp: 'الآن',
+      linkTo: '/inventory'
+    });
+  }
+
+  return {
+    notifications: notifications.slice(0, 15),
+    unreadCount: notifications.length,
+    summary: {
+      fleetAlerts: fleetAlertCount,
+      commissionPending: pendingCount,
+      inventoryAlerts: critProdCount
+    }
+  };
+}
+
+function getFleetKPIs(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  const vehicles = getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
+  const total = vehicles.length;
+  let active = 0;
+  let inMaint = 0;
+  let notReady = 0;
+  let sumReadiness = 0;
+  let fuelCostMTD = 0;
+  let maintCostMTD = 0;
+  let accidentCostMTD = 0;
+  let expiringIns = 0;
+  let expiringInsp = 0;
+  let expiringLic = 0;
+  let upcomingMaint = 0;
+  const now = new Date();
+
+  for (let i = 0; i < total; i++) {
+    const v = vehicles[i];
+    if (v.Operational_Status === 'ACTIVE') active++;
+    else if (v.Operational_Status === 'IN_MAINTENANCE') inMaint++;
+    else if (v.Operational_Status === 'NOT_READY' || v.Operational_Status === 'ACCIDENT' || v.Operational_Status === 'STOPPED') notReady++;
+
+    const score = Number(v.Readiness_Score !== undefined ? v.Readiness_Score : (v.Readiness_Index !== undefined ? v.Readiness_Index : 100)) || 100;
+    sumReadiness += score;
+
+    fuelCostMTD += Number(v.Fuel_Cost_MTD) || 0;
+    maintCostMTD += Number(v.Maint_Cost_MTD) || 0;
+    accidentCostMTD += Number(v.Accident_Cost_MTD) || 0;
+
+    if (v.Insurance_Expiry) {
+      const d = new Date(v.Insurance_Expiry);
+      if ((d.getTime() - now.getTime()) / (1000 * 3600 * 24) <= 30) expiringIns++;
+    }
+    if (v.Inspection_Expiry || v.Periodic_Inspection_Expiry) {
+      const d = new Date(v.Inspection_Expiry || v.Periodic_Inspection_Expiry);
+      if ((d.getTime() - now.getTime()) / (1000 * 3600 * 24) <= 30) expiringInsp++;
+    }
+    if (v.License_Expiry || v.Registration_Expiry) {
+      const d = new Date(v.License_Expiry || v.Registration_Expiry);
+      if ((d.getTime() - now.getTime()) / (1000 * 3600 * 24) <= 30) expiringLic++;
+    }
+    if (v.Next_Maint_Date) {
+      const d = new Date(v.Next_Maint_Date);
+      if ((d.getTime() - now.getTime()) / (1000 * 3600 * 24) <= 14) upcomingMaint++;
+    }
+  }
+
+  const avgReadiness = total > 0 ? Math.round(sumReadiness / total) : 100;
+  const totalFleetCostMTD = fuelCostMTD + maintCostMTD + accidentCostMTD;
+
+  return {
+    totalVehicles: total,
+    activeVehicles: active,
+    inMaintenanceVehicles: inMaint,
+    notReadyVehicles: notReady,
+    averageReadinessIndex: avgReadiness,
+    fuelCostMTD: Number(fuelCostMTD.toFixed(2)),
+    maintCostMTD: Number(maintCostMTD.toFixed(2)),
+    accidentCostMTD: Number(accidentCostMTD.toFixed(2)),
+    totalFleetCostMTD: Number(totalFleetCostMTD.toFixed(2)),
+    openAccidentsCount: 0,
+    expiringInsuranceCount: expiringIns,
+    expiringInspectionCount: expiringInsp,
+    expiringLicenseCount: expiringLic,
+    upcomingMaintenanceCount: upcomingMaint
+  };
+}
 
 function getSystemHealth() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -778,17 +971,20 @@ function getSettings(payload) {
     'COM-0001'
   ).trim();
   
-  let companies = companyId 
-    ? getTableData('Companies', { CompanyID: companyId, includeDeleted: true })
-    : getTableData('Companies', { CompanyCode: companyCode, includeDeleted: true });
-    
-  if (!companies.length && companyCode) {
-     companies = getTableData('Companies', { CompanyCode: companyCode, includeDeleted: true });
+  // Single-pass company resolution
+  const allCompanies = getTableData('Companies', { includeDeleted: true });
+  let company = null;
+  for (let i = 0; i < allCompanies.length; i++) {
+    const c = allCompanies[i];
+    if ((companyId && String(c.CompanyID).trim() === companyId) ||
+        (companyCode && String(c.CompanyCode).trim() === companyCode) ||
+        (companyId && String(c.CompanyCode).trim() === companyId)) {
+      company = c;
+      break;
+    }
   }
   
-  const company = companies.length > 0 ? companies[0] : null;
-  const resolvedCompanyId = company ? String(company.CompanyID).trim() : companyId;
-  
+  const resolvedCompanyId = company ? String(company.CompanyID).trim() : (companyId || 'COM-0001');
   const settingsRecords = getTableData('Settings', { CompanyID: resolvedCompanyId });
   
   const settings = {};
@@ -814,9 +1010,10 @@ function getSettings(payload) {
     settings.DateFormat = company.DateFormat || '';
   }
   
-  settingsRecords.forEach(r => {
+  for (let s = 0; s < settingsRecords.length; s++) {
+    const r = settingsRecords[s];
     settings[r.SettingKey] = r.SettingValue;
-  });
+  }
   
   return { company: company, settings: settings };
 }
@@ -1934,13 +2131,7 @@ function handleDeleteOffer(payload) {
 
 function handleGetVehicles(payload) {
   const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
-  const cacheKey = 'Vehicles_' + companyId;
-  const cached = ServerCache.get(cacheKey);
-  if (cached) return cached;
-  
-  const vehicles = getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
-  ServerCache.put(cacheKey, vehicles, 180); // 3 minutes cache
-  return vehicles;
+  return getTableData('Vehicles', { CompanyID: companyId, includeDeleted: false });
 }
 
 function handleGetVehicleById(payload) {

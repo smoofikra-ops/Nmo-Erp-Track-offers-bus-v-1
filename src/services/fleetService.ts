@@ -1318,6 +1318,15 @@ export const fleetService = {
   // FLEET KPIS & NOTIFICATIONS
   // ==========================
   getFleetKPIs: async (companyId: string = 'COM-0001'): Promise<ApiResponse<FleetKPIs>> => {
+    try {
+      const response = await ApiClient.post<FleetKPIs>('GET_FLEET_KPIS', { CompanyID: companyId });
+      if (response.success && response.data) {
+        return response;
+      }
+    } catch {
+      // Fallback to client calculation if backend endpoint unavailable
+    }
+
     const res = await fleetService.getVehicles(companyId);
     const vehicles = res.data || [];
 
