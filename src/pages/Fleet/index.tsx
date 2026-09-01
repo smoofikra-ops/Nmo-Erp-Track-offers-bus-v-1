@@ -537,6 +537,7 @@ export default function FleetPage() {
       ) : (
         <VehicleTable
           vehicles={filteredVehicles}
+          getLinkedEmployee={getLinkedEmployee}
           onViewDetails={(id) => setSelectedVehicleId(id)}
           onEdit={(v) => {
             setEditingVehicle(v);

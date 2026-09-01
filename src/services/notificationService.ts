@@ -5,7 +5,7 @@ export interface ERPNotification {
   id: string;
   title: string;
   description: string;
-  module: 'FLEET' | 'COMMISSIONS' | 'INVENTORY';
+  module: 'FLEET' | 'COMMISSIONS' | 'INVENTORY' | 'DOCUMENTS';
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   timestamp: string;
   linkTo: string;
@@ -18,6 +18,7 @@ export interface NotificationSummaryResponse {
     fleetAlerts: number;
     commissionPending: number;
     inventoryAlerts: number;
+    documentAlerts?: number;
   };
 }
 

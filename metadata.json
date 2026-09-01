@@ -1,6 +1,6 @@
 {
   "name": "NmoLabs Flow",
-  "description": "Multi-company ERP & Fleet Management platform with automated readiness index, fuel logs, maintenance tracking, and commission management.",
+  "description": "Multi-company ERP, Fleet Management & Compliance Center platform with digital document cards, automated expiry tracking, readiness index, and commission management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

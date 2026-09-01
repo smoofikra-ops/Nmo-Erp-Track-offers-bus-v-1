@@ -1,6 +1,8 @@
 import React from 'react';
 import { Vehicle } from '@/types/fleet';
+import { Employee } from '@/types/models';
 import { ReadinessGauge } from './ReadinessGauge';
+import { calculateExpiryStatus } from '@/data/fleetMasterData';
 import { 
   Eye, Edit, Trash2, Fuel, Wrench, AlertTriangle, 
   ArrowUpDown, MoreHorizontal, User, Gauge
@@ -8,6 +10,7 @@ import {
 
 interface VehicleTableProps {
   vehicles: Vehicle[];
+  getLinkedEmployee?: (v: Vehicle) => Employee | null;
   onViewDetails: (vehicleId: string) => void;
   onEdit: (vehicle: Vehicle) => void;
   onDelete: (vehicle: Vehicle) => void;
@@ -17,6 +20,7 @@ interface VehicleTableProps {
 
 export function VehicleTable({
   vehicles,
+  getLinkedEmployee,
   onViewDetails,
   onEdit,
   onDelete,
@@ -89,14 +93,31 @@ export function VehicleTable({
 
                 {/* Driver */}
                 <td className="py-3.5 px-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
-                      {v.Primary_Driver_Name ? v.Primary_Driver_Name[0] : '-'}
-                    </div>
-                    <span className="font-medium text-slate-800 dark:text-slate-200">
-                      {v.Primary_Driver_Name || <span className="text-slate-400 italic">غير مسند</span>}
-                    </span>
-                  </div>
+                  {(() => {
+                    const emp = getLinkedEmployee ? getLinkedEmployee(v) : null;
+                    const licenseExp = emp?.DrivingLicenseExpiryDate || (emp as any)?.DriverLicenseExpiryDate;
+                    const licenseStatus = licenseExp ? calculateExpiryStatus(licenseExp) : null;
+
+                    return (
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                            {v.Primary_Driver_Name ? v.Primary_Driver_Name[0] : '-'}
+                          </div>
+                          <span className="font-medium text-slate-800 dark:text-slate-200">
+                            {v.Primary_Driver_Name || <span className="text-slate-400 italic">غير مسند</span>}
+                          </span>
+                        </div>
+                        {licenseStatus && (
+                          <div className="text-[10px] pr-8">
+                            <span className={`px-1.5 py-0.2 rounded border text-[9px] font-medium ${licenseStatus.badgeClass}`}>
+                              رخصة: {licenseStatus.label}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </td>
 
                 {/* Odometer */}

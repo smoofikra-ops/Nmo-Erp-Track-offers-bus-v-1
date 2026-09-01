@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Bell, ShieldAlert, AlertTriangle, Package, DollarSign, Truck, Check, ExternalLink } from 'lucide-react';
+import { Bell, ShieldAlert, AlertTriangle, Package, DollarSign, Truck, Check, ExternalLink, ShieldCheck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { notificationService, ERPNotification } from '../../services/notificationService';
 import { useNavigate } from 'react-router-dom';
@@ -49,6 +49,8 @@ export const NotificationCenter: React.FC = () => {
         return <DollarSign className="w-4 h-4 text-emerald-600" />;
       case 'INVENTORY':
         return <Package className="w-4 h-4 text-amber-600" />;
+      case 'DOCUMENTS':
+        return <ShieldCheck className="w-4 h-4 text-indigo-600" />;
     }
   };
 

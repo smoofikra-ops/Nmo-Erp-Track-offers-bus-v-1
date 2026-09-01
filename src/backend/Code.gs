@@ -162,6 +162,24 @@ const SCHEMA = {
   Fleet_Documents: [
     "Document_ID", "CompanyID", "Vehicle_ID", "Document_Type", "Document_Name", "Document_Number", 
     "Issue_Date", "Expiry_Date", "File_URL", "File_Size", "File_Type", "Notes", "CreatedAt", "CreatedBy", "IsDeleted"
+  ],
+  Company_Documents: [
+    "Document_ID", "CompanyID", "Document_Type_ID", "Category_ID", "Document_Name", "Issuing_Authority", 
+    "Primary_Number", "Secondary_Number", "Issue_Date", "Expiry_Date", "Last_Renewal_Date", "Next_Renewal_Date", 
+    "Status", "Reminder_Days", "Notes", "Attachment_File_ID", "Attachment_File_Name", "Attachment_URL", 
+    "Custom_Fields_JSON", "Branch", "Created_By", "Created_At", "Updated_By", "Updated_At", "Is_Active", "Is_Archived", "Is_Deleted"
+  ],
+  Document_Types: [
+    "Type_ID", "CompanyID", "Category_ID", "TypeNameAR", "TypeNameEN", "IssuingAuthorityDefault", 
+    "Code", "Icon", "HasExpiry", "DefaultReminderDays", "RequiredFields_JSON", "CustomFieldsConfig_JSON", 
+    "DisplayOrder", "Status", "CreatedAt", "UpdatedAt", "IsDeleted"
+  ],
+  Document_Categories: [
+    "CategoryID", "CompanyID", "CategoryNameAR", "CategoryNameEN", "DisplayOrder", "Status", "CreatedAt", "UpdatedAt", "IsDeleted"
+  ],
+  Document_Renewal_History: [
+    "Renewal_ID", "CompanyID", "Document_ID", "Previous_Expiry_Date", "Renewal_Date", "New_Expiry_Date", 
+    "Notes", "Attachment_File_ID", "Attachment_File_Name", "Attachment_URL", "Updated_By", "CreatedAt"
   ]
 };
 
@@ -566,6 +584,20 @@ function doPost(e) {
       case 'BULK_IMPORT_VEHICLES': resultData = handleImportVehiclesBatch(payload); break;
       case 'bulkImportVehicles': resultData = handleImportVehiclesBatch(payload); break;
 
+      // COMPANY DOCUMENTS & COMPLIANCE
+      case 'GET_COMPANY_DOCUMENTS': resultData = handleGetCompanyDocuments(payload); break;
+      case 'GET_COMPANY_DOCUMENT_BY_ID': resultData = handleGetCompanyDocumentById(payload); break;
+      case 'CREATE_COMPANY_DOCUMENT': resultData = handleCreateCompanyDocument(payload); break;
+      case 'UPDATE_COMPANY_DOCUMENT': resultData = handleUpdateCompanyDocument(payload); break;
+      case 'RENEW_COMPANY_DOCUMENT': resultData = handleRenewCompanyDocument(payload); break;
+      case 'ARCHIVE_COMPANY_DOCUMENT': resultData = handleArchiveCompanyDocument(payload); break;
+      case 'DELETE_COMPANY_DOCUMENT': resultData = handleDeleteCompanyDocument(payload); break;
+      case 'GET_DOCUMENT_TYPES': resultData = handleGetDocumentTypes(payload); break;
+      case 'SAVE_DOCUMENT_TYPE': resultData = handleSaveDocumentType(payload); break;
+      case 'GET_DOCUMENT_CATEGORIES': resultData = handleGetDocumentCategories(payload); break;
+      case 'GET_DOCUMENTS_SUMMARY': resultData = handleGetDocumentsSummary(payload); break;
+      case 'UPLOAD_DOCUMENT_FILE': resultData = handleUploadDocumentFile(payload); break;
+
       default:
         perfMetrics.totalExecutionMs = new Date().getTime() - startTime;
         return responseError("Unknown action requested", "UNKNOWN_ACTION", "", perfMetrics);
@@ -667,13 +699,63 @@ function getNotificationSummary(payload) {
     });
   }
 
+  // 4. Check Company Documents & Compliance Expiries
+  const companyDocs = getTableData('Company_Documents', { CompanyID: companyId, includeDeleted: false });
+  let docAlertCount = 0;
+  for (let m = 0; m < companyDocs.length; m++) {
+    const doc = companyDocs[m];
+    if (doc.Is_Archived && String(doc.Is_Archived).toLowerCase() === 'true') continue;
+    if (doc.Expiry_Date) {
+      const expDate = new Date(doc.Expiry_Date);
+      if (!isNaN(expDate.getTime())) {
+        const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+        const remDays = Number(doc.Reminder_Days) || 60;
+        if (diffDays < 0) {
+          docAlertCount++;
+          notifications.push({
+            id: 'notif-doc-exp-' + doc.Document_ID,
+            title: 'وثيقة منتهية: ' + (doc.Document_Name || 'مستند رسمي'),
+            description: 'انتهت صلاحية الوثيقة (' + (doc.Issuing_Authority || 'جهة الإصدار') + ') منذ ' + Math.abs(diffDays) + ' يوم وتتطلب التجديد الفوري',
+            module: 'DOCUMENTS',
+            priority: 'CRITICAL',
+            timestamp: 'منتهية',
+            linkTo: '/documents'
+          });
+        } else if (diffDays <= 7) {
+          docAlertCount++;
+          notifications.push({
+            id: 'notif-doc-crit-' + doc.Document_ID,
+            title: 'تجديد عاجل: ' + (doc.Document_Name || 'مستند رسمي'),
+            description: 'تنتهي صلاحية الوثيقة خلال ' + diffDays + ' أيام فقط',
+            module: 'DOCUMENTS',
+            priority: 'CRITICAL',
+            timestamp: 'عاجل جداً',
+            linkTo: '/documents'
+          });
+        } else if (diffDays <= remDays) {
+          docAlertCount++;
+          notifications.push({
+            id: 'notif-doc-warn-' + doc.Document_ID,
+            title: 'تنبيه استحقاق تجديد: ' + (doc.Document_Name || 'مستند رسمي'),
+            description: 'متبقي ' + diffDays + ' يوم على انتهاء الصلاحية',
+            module: 'DOCUMENTS',
+            priority: diffDays <= 30 ? 'HIGH' : 'MEDIUM',
+            timestamp: diffDays + ' يوم',
+            linkTo: '/documents'
+          });
+        }
+      }
+    }
+  }
+
   return {
-    notifications: notifications.slice(0, 15),
+    notifications: notifications.slice(0, 20),
     unreadCount: notifications.length,
     summary: {
       fleetAlerts: fleetAlertCount,
       commissionPending: pendingCount,
-      inventoryAlerts: critProdCount
+      inventoryAlerts: critProdCount,
+      documentAlerts: docAlertCount
     }
   };
 }
@@ -2655,5 +2737,361 @@ function handleImportVehiclesBatch(payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ==========================================
+// DOCUMENTS, LICENSES & COMPLIANCE HANDLERS
+// ==========================================
+
+function handleGetCompanyDocuments(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  const includeArchived = Boolean(payload.includeArchived);
+  
+  ensureDocumentTablesExist();
+  const docs = getTableData('Company_Documents', { CompanyID: companyId, includeDeleted: false });
+  
+  if (!includeArchived) {
+    return docs.filter(d => !d.Is_Archived || String(d.Is_Archived).toLowerCase() === 'false');
+  }
+  return docs;
+}
+
+function handleGetCompanyDocumentById(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  const documentId = payload.Document_ID || payload.documentId;
+  ensureDocumentTablesExist();
+  const docs = getTableData('Company_Documents', { CompanyID: companyId, Document_ID: documentId, includeDeleted: false });
+  if (docs.length === 0) throw new Error("Document not found");
+  
+  const renewals = getTableData('Document_Renewal_History', { CompanyID: companyId, Document_ID: documentId });
+  const doc = docs[0];
+  doc.renewalHistory = renewals;
+  return doc;
+}
+
+function handleCreateCompanyDocument(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    ensureDocumentTablesExist();
+    const docId = payload.Document_ID || ('DOC-' + Date.now());
+    const now = getTimestamp();
+    
+    const newDoc = {
+      Document_ID: docId,
+      CompanyID: companyId,
+      Document_Type_ID: payload.Document_Type_ID || '',
+      Category_ID: payload.Category_ID || '',
+      Document_Name: payload.Document_Name || '',
+      Issuing_Authority: payload.Issuing_Authority || '',
+      Primary_Number: payload.Primary_Number || '',
+      Secondary_Number: payload.Secondary_Number || '',
+      Issue_Date: payload.Issue_Date || '',
+      Expiry_Date: payload.Expiry_Date || '',
+      Last_Renewal_Date: payload.Last_Renewal_Date || payload.Issue_Date || '',
+      Next_Renewal_Date: payload.Next_Renewal_Date || '',
+      Status: payload.Status || 'ACTIVE',
+      Reminder_Days: Number(payload.Reminder_Days) || 60,
+      Notes: payload.Notes || '',
+      Attachment_File_ID: payload.Attachment_File_ID || '',
+      Attachment_File_Name: payload.Attachment_File_Name || '',
+      Attachment_URL: payload.Attachment_URL || '',
+      Custom_Fields_JSON: typeof payload.Custom_Fields_JSON === 'string' ? payload.Custom_Fields_JSON : JSON.stringify(payload.Custom_Fields_JSON || {}),
+      Branch: payload.Branch || '',
+      Created_By: payload.Created_By || 'ADMIN',
+      Created_At: now,
+      Updated_By: payload.Updated_By || 'ADMIN',
+      Updated_At: now,
+      Is_Active: true,
+      Is_Archived: false,
+      Is_Deleted: false
+    };
+
+    insertRow('Company_Documents', newDoc);
+    logAudit(companyId, payload.Created_By || 'ADMIN', 'DOCUMENTS', 'CREATE', 'Company_Documents', docId, null, newDoc);
+    return newDoc;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleUpdateCompanyDocument(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  const docId = payload.Document_ID;
+  if (!docId) throw new Error("Document_ID is required");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    ensureDocumentTablesExist();
+    const existing = getTableData('Company_Documents', { CompanyID: companyId, Document_ID: docId, includeDeleted: true });
+    if (existing.length === 0) throw new Error("Document not found");
+
+    const updateObj = { ...payload };
+    updateObj.Updated_At = getTimestamp();
+    if (typeof updateObj.Custom_Fields_JSON !== 'string' && updateObj.Custom_Fields_JSON !== undefined) {
+      updateObj.Custom_Fields_JSON = JSON.stringify(updateObj.Custom_Fields_JSON);
+    }
+
+    updateRow('Company_Documents', 'Document_ID', docId, updateObj);
+    logAudit(companyId, payload.Updated_By || 'ADMIN', 'DOCUMENTS', 'UPDATE', 'Company_Documents', docId, existing[0], updateObj);
+    return { ...existing[0], ...updateObj };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleRenewCompanyDocument(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  const docId = payload.Document_ID;
+  if (!docId) throw new Error("Document_ID is required");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    ensureDocumentTablesExist();
+    const existing = getTableData('Company_Documents', { CompanyID: companyId, Document_ID: docId, includeDeleted: false });
+    if (existing.length === 0) throw new Error("Document not found");
+
+    const doc = existing[0];
+    const previousExpiry = payload.Previous_Expiry_Date || doc.Expiry_Date || '';
+    const newExpiry = payload.New_Expiry_Date;
+    const renewalDate = payload.Renewal_Date || getTimestamp().split('T')[0];
+    const now = getTimestamp();
+
+    // 1. Insert into Document_Renewal_History
+    const renewalRecord = {
+      Renewal_ID: 'REN-' + Date.now(),
+      CompanyID: companyId,
+      Document_ID: docId,
+      Previous_Expiry_Date: previousExpiry,
+      Renewal_Date: renewalDate,
+      New_Expiry_Date: newExpiry,
+      Notes: payload.Notes || 'تجديد دوري للوثيقة',
+      Attachment_File_ID: payload.Attachment_File_ID || '',
+      Attachment_File_Name: payload.Attachment_File_Name || '',
+      Attachment_URL: payload.Attachment_URL || doc.Attachment_URL || '',
+      Updated_By: payload.Updated_By || 'ADMIN',
+      CreatedAt: now
+    };
+    insertRow('Document_Renewal_History', renewalRecord);
+
+    // 2. Update parent document
+    const updatePayload = {
+      Expiry_Date: newExpiry,
+      Last_Renewal_Date: renewalDate,
+      Status: 'ACTIVE',
+      Updated_At: now
+    };
+    if (payload.Attachment_URL) updatePayload.Attachment_URL = payload.Attachment_URL;
+    if (payload.Attachment_File_Name) updatePayload.Attachment_File_Name = payload.Attachment_File_Name;
+    if (payload.Attachment_File_ID) updatePayload.Attachment_File_ID = payload.Attachment_File_ID;
+
+    updateRow('Company_Documents', 'Document_ID', docId, updatePayload);
+    logAudit(companyId, payload.Updated_By || 'ADMIN', 'DOCUMENTS', 'RENEW', 'Company_Documents', docId, doc, updatePayload);
+
+    return { ...doc, ...updatePayload };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleArchiveCompanyDocument(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  const docId = payload.Document_ID;
+  const isArchived = payload.Is_Archived !== false;
+  ensureDocumentTablesExist();
+  updateRow('Company_Documents', 'Document_ID', docId, {
+    Is_Archived: isArchived,
+    Status: isArchived ? 'ARCHIVED' : 'ACTIVE',
+    Updated_At: getTimestamp()
+  });
+  return { success: true, Document_ID: docId, Is_Archived: isArchived };
+}
+
+function handleDeleteCompanyDocument(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  const docId = payload.Document_ID;
+  ensureDocumentTablesExist();
+  updateRow('Company_Documents', 'Document_ID', docId, {
+    Is_Deleted: true,
+    Status: 'SUSPENDED',
+    Updated_At: getTimestamp()
+  });
+  return { success: true, Document_ID: docId, Is_Deleted: true };
+}
+
+function handleGetDocumentTypes(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  ensureDocumentTablesExist();
+  const types = getTableData('Document_Types', { CompanyID: companyId, includeDeleted: false });
+  return types;
+}
+
+function handleSaveDocumentType(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    ensureDocumentTablesExist();
+    const typeId = payload.Type_ID || ('DT_' + Date.now());
+    const existing = getTableData('Document_Types', { CompanyID: companyId, Type_ID: typeId, includeDeleted: true });
+    
+    const typeData = {
+      Type_ID: typeId,
+      CompanyID: companyId,
+      Category_ID: payload.Category_ID || 'CAT_OTHER',
+      TypeNameAR: payload.TypeNameAR || '',
+      TypeNameEN: payload.TypeNameEN || '',
+      IssuingAuthorityDefault: payload.IssuingAuthorityDefault || '',
+      Code: payload.Code || '',
+      Icon: payload.Icon || 'FileText',
+      HasExpiry: payload.HasExpiry !== false,
+      DefaultReminderDays: Number(payload.DefaultReminderDays) || 30,
+      RequiredFields_JSON: typeof payload.RequiredFields_JSON === 'string' ? payload.RequiredFields_JSON : JSON.stringify(payload.RequiredFields_JSON || []),
+      CustomFieldsConfig_JSON: typeof payload.CustomFieldsConfig_JSON === 'string' ? payload.CustomFieldsConfig_JSON : JSON.stringify(payload.CustomFieldsConfig_JSON || []),
+      DisplayOrder: Number(payload.DisplayOrder) || 10,
+      Status: payload.Status || 'ACTIVE',
+      UpdatedAt: getTimestamp(),
+      IsDeleted: false
+    };
+
+    if (existing.length > 0) {
+      updateRow('Document_Types', 'Type_ID', typeId, typeData);
+    } else {
+      typeData.CreatedAt = getTimestamp();
+      insertRow('Document_Types', typeData);
+    }
+
+    return typeData;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleGetDocumentCategories(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  ensureDocumentTablesExist();
+  return getTableData('Document_Categories', { CompanyID: companyId, includeDeleted: false });
+}
+
+function handleGetDocumentsSummary(payload) {
+  const companyId = payload.CompanyID || 'COM-0001';
+  ensureDocumentTablesExist();
+  const docs = getTableData('Company_Documents', { CompanyID: companyId, includeDeleted: false });
+  const types = getTableData('Document_Types', { CompanyID: companyId, includeDeleted: false });
+  const typeMap = {};
+  types.forEach(t => { typeMap[t.Type_ID] = t; });
+
+  const now = new Date();
+  let safe = 0;
+  let expiringSoon = 0;
+  let expired = 0;
+  let nearestDoc = null;
+  let minDays = Infinity;
+
+  docs.forEach(doc => {
+    if (doc.Is_Archived && String(doc.Is_Archived).toLowerCase() === 'true') return;
+    const t = typeMap[doc.Document_Type_ID];
+    const hasExp = t ? (t.HasExpiry !== false) : Boolean(doc.Expiry_Date);
+    
+    if (hasExp && doc.Expiry_Date) {
+      const d = new Date(doc.Expiry_Date);
+      if (!isNaN(d.getTime())) {
+        const days = Math.ceil((d.getTime() - now.getTime()) / (1000 * 3600 * 24));
+        if (days < 0) {
+          expired++;
+        } else if (days <= (Number(doc.Reminder_Days) || 60)) {
+          expiringSoon++;
+        } else {
+          safe++;
+        }
+
+        if (days >= 0 && days < minDays) {
+          minDays = days;
+          nearestDoc = {
+            id: doc.Document_ID,
+            name: doc.Document_Name,
+            daysRemaining: days,
+            expiryDate: doc.Expiry_Date
+          };
+        }
+      } else {
+        safe++;
+      }
+    } else {
+      safe++;
+    }
+  });
+
+  return {
+    totalActive: docs.filter(d => !d.Is_Archived).length,
+    safeCount: safe,
+    expiringSoonCount: expiringSoon,
+    expiredCount: expired,
+    nearestExpiringDoc: nearestDoc
+  };
+}
+
+function handleUploadDocumentFile(payload) {
+  const companyId = payload.CompanyID || payload.companyId || 'COM-0001';
+  const fileName = payload.fileName || ('doc_attachment_' + Date.now() + '.pdf');
+  const mimeType = payload.mimeType || 'application/pdf';
+  const base64Data = payload.base64Data;
+  const categoryName = payload.category || 'General';
+  const year = new Date().getFullYear().toString();
+
+  if (!base64Data) throw new Error("base64Data is required");
+
+  // Create folder hierarchy: NMO ERP / Company Documents / {CategoryName} / {Year}
+  let targetFolder = getOrCreateDriveFolderHierarchy(['NMO ERP', 'Company Documents', categoryName, year]);
+
+  const decodedBytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
+  const file = targetFolder.createFile(blob);
+  
+  // Set sharing to anyone with link for secure app preview
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  return {
+    fileId: file.getId(),
+    fileUrl: file.getUrl(),
+    downloadUrl: file.getDownloadUrl(),
+    fileName: fileName,
+    fileSize: file.getSize()
+  };
+}
+
+function getOrCreateDriveFolderHierarchy(pathSegments) {
+  let currentFolder = DriveApp.getRootFolder();
+  for (let i = 0; i < pathSegments.length; i++) {
+    const name = pathSegments[i];
+    const subFolders = currentFolder.getFoldersByName(name);
+    if (subFolders.hasNext()) {
+      currentFolder = subFolders.next();
+    } else {
+      currentFolder = currentFolder.createFolder(name);
+    }
+  }
+  return currentFolder;
+}
+
+function ensureDocumentTablesExist() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const required = ['Company_Documents', 'Document_Types', 'Document_Categories', 'Document_Renewal_History'];
+  
+  required.forEach(tableName => {
+    let sheet = ss.getSheetByName(tableName);
+    if (!sheet) {
+      sheet = ss.insertSheet(tableName);
+      const headers = SCHEMA[tableName];
+      if (headers) {
+        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+        sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+        sheet.setFrozenRows(1);
+      }
+    }
+  });
 }
 

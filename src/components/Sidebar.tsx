@@ -11,6 +11,7 @@ import {
   Settings,
   FileText,
   Sparkles,
+  ShieldCheck,
   X,
   Pin,
   PinOff,
@@ -109,6 +110,12 @@ export function Sidebar() {
       to: "/quotes",
       icon: FileText,
       label: t("modules.quotes", "عروض الأسعار"),
+      exact: false,
+    },
+    {
+      to: "/documents",
+      icon: ShieldCheck,
+      label: t("modules.documents", "المستندات والوثائق"),
       exact: false,
     },
     {
