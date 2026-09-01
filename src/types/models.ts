@@ -126,6 +126,11 @@ export interface Employee extends BaseEntity {
   Status: EmployeeStatus;
   Notes?: string;
   ImageURL?: string;
+  DrivingLicenseNumber?: string;
+  DrivingLicenseType?: string;
+  DrivingLicenseIssueDate?: string;
+  DrivingLicenseExpiryDate?: string;
+  DrivingLicenseStatus?: string;
 }
 
 export interface Product extends BaseEntity {

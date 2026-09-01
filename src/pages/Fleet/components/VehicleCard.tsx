@@ -1,16 +1,18 @@
 import React from 'react';
 import { Vehicle } from '@/types/fleet';
+import { Employee } from '@/types/models';
 import { ReadinessGauge } from './ReadinessGauge';
 import { calculateExpiryStatus } from '@/data/fleetMasterData';
 import { 
   Gauge, User, AlertTriangle, 
   Fuel, Wrench, MoreVertical, Eye, Edit, Trash2,
-  CheckCircle2, AlertCircle, Info
+  CheckCircle2, AlertCircle, Info, Shield, FileText, IdCard
 } from 'lucide-react';
 
 interface VehicleCardProps {
   key?: React.Key;
   vehicle: Vehicle;
+  linkedEmployee?: Employee | null;
   onViewDetails: (vehicleId: string) => void;
   onEdit: (vehicle: Vehicle) => void;
   onDelete: (vehicle: Vehicle) => void;
@@ -22,6 +24,7 @@ export type VehicleRiskLevel = 'CRITICAL' | 'WARNING' | 'ATTENTION' | 'NORMAL';
 
 export function VehicleCard({
   vehicle,
+  linkedEmployee,
   onViewDetails,
   onEdit,
   onDelete,
@@ -42,14 +45,16 @@ export function VehicleCard({
     SOLD: { label: 'مباعة', bg: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400 border-gray-300' },
   }[vehicle.Operational_Status] || { label: vehicle.Operational_Status, bg: 'bg-slate-100 text-slate-700 border-slate-200' };
 
-  // Expiry checks for 3 core documents
+  // Expiry checks for 3 core documents + Driver License
   const regExpiry = vehicle.Registration_Expiry || vehicle.License_Expiry;
   const insExpiry = vehicle.Insurance_Expiry;
   const inspExpiry = vehicle.Periodic_Inspection_Expiry || vehicle.Inspection_Expiry;
+  const driverLicenseExpiry = linkedEmployee?.DrivingLicenseExpiryDate || (linkedEmployee as any)?.DriverLicenseExpiryDate;
 
   const regStatus = calculateExpiryStatus(regExpiry);
   const insStatus = calculateExpiryStatus(insExpiry);
   const inspStatus = calculateExpiryStatus(inspExpiry);
+  const driverLicenseStatus = driverLicenseExpiry ? calculateExpiryStatus(driverLicenseExpiry) : null;
 
   const readinessScore = vehicle.Readiness_Score ?? vehicle.Readiness_Index ?? 100;
   const displayUser = vehicle.Assigned_User_Name || vehicle.Primary_Driver_Name || (vehicle as any).Driver_Name || vehicle.Owner_Name || 'سائق غير محدد';
@@ -78,6 +83,13 @@ export function VehicleCard({
         level: 'CRITICAL', 
         text: `رخصة السير (الاستمارة) منتهية`,
         icon: 'file'
+      });
+    }
+    if (driverLicenseStatus && (driverLicenseStatus.status === 'EXPIRED' || driverLicenseStatus.daysRemaining < 0)) {
+      list.push({ 
+        level: 'CRITICAL', 
+        text: `رخصة قيادة السائق (${displayUser}) منتهية`,
+        icon: 'license'
       });
     }
     if (['ACCIDENT', 'NOT_READY', 'STOPPED'].includes(vehicle.Operational_Status)) {
@@ -117,6 +129,13 @@ export function VehicleCard({
         icon: 'file'
       });
     }
+    if (driverLicenseStatus && driverLicenseStatus.daysRemaining >= 0 && driverLicenseStatus.daysRemaining <= 15) {
+      list.push({ 
+        level: 'WARNING', 
+        text: `رخصة قيادة السائق تنتهي خلال ${driverLicenseStatus.daysRemaining} يوم`,
+        icon: 'license'
+      });
+    }
     if (vehicle.Operational_Status === 'IN_MAINTENANCE') {
       list.push({ 
         level: 'WARNING', 
@@ -154,6 +173,13 @@ export function VehicleCard({
         icon: 'file'
       });
     }
+    if (driverLicenseStatus && driverLicenseStatus.daysRemaining > 15 && driverLicenseStatus.daysRemaining <= 60) {
+      list.push({ 
+        level: 'ATTENTION', 
+        text: `متابعة تجديد رخصة قيادة السائق (باقي ${driverLicenseStatus.daysRemaining} يوم)`,
+        icon: 'license'
+      });
+    }
     if (readinessScore >= 75 && readinessScore < 85) {
       list.push({ 
         level: 'ATTENTION', 
@@ -179,7 +205,7 @@ export function VehicleCard({
       issues: list,
       primaryReason: primary
     };
-  }, [insStatus, inspStatus, regStatus, vehicle.Operational_Status, readinessScore, statusConfig.label]);
+  }, [insStatus, inspStatus, regStatus, driverLicenseStatus, vehicle.Operational_Status, readinessScore, statusConfig.label, displayUser]);
 
   // Visual Theme Config according to Risk Level (3D Neon-style Borders)
   const riskTheme = {
@@ -334,10 +360,20 @@ export function VehicleCard({
 
             {/* Driver Text Hierarchy */}
             <div className="min-w-0 flex-1 text-right">
-              <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 block leading-none">
-                السائق
-              </span>
-              <span className="font-extrabold text-slate-900 dark:text-white truncate block text-xs sm:text-[13px] leading-tight mt-0.5">
+              <div className="flex items-center justify-between gap-1 leading-none">
+                <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 block">
+                  السائق
+                </span>
+                {driverLicenseStatus && (
+                  <span 
+                    className={`text-[8px] font-bold px-1 py-0.5 rounded border leading-none shrink-0 ${driverLicenseStatus.badgeClass}`}
+                    title={`رخصة القيادة: ${driverLicenseStatus.label} (${driverLicenseExpiry})`}
+                  >
+                    رخصة {driverLicenseStatus.label}
+                  </span>
+                )}
+              </div>
+              <span className="font-extrabold text-slate-900 dark:text-white truncate block text-xs sm:text-[13px] leading-tight mt-1">
                 {displayUser}
               </span>
             </div>

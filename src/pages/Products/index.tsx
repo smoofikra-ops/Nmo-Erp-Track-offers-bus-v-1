@@ -145,13 +145,17 @@ export function Products() {
       }
     },
     onSuccess: async (res) => {
-      if (res.success) {
-        toast.success('تم حفظ التعديلات بنجاح.');
+      if (res && res.success) {
+        toast.success('تم حفظ المنتج بنجاح في قاعدة البيانات.');
         resetForm();
         await queryClient.invalidateQueries({ queryKey: ['products', companyId] });
       } else {
-        toast.error('فشل الحفظ: ' + (res.message || 'خطأ غير معروف'));
+        toast.error('تعذر حفظ المنتج: ' + (res?.message || 'لم يتم تأكيد الحفظ في الخادم'));
       }
+    },
+    onError: (err: any) => {
+      console.error('Save product error:', err);
+      toast.error('حدث خطأ في الاتصال بالخادم: ' + (err?.message || 'يرجى المحاولة مجدداً'));
     }
   });
 

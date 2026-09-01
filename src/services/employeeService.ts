@@ -115,60 +115,67 @@ export const employeeService = {
   },
   
   createEmployee: async (data: any): Promise<ApiResponse<Employee>> => {
-    const newEmp: Employee = {
-      EmployeeID: data.EmployeeID || `EMP-${Date.now().toString().slice(-6)}`,
-      CompanyID: data.CompanyID || 'COM-0001',
-      EmployeeCode: data.EmployeeCode || `EMP-${Math.floor(100 + Math.random() * 900)}`,
-      ArabicName: data.ArabicName || '',
-      EnglishName: data.EnglishName || '',
-      Alias: data.Alias || data.ArabicName || '',
-      Mobile: data.Mobile || '',
-      Email: data.Email || '',
-      NationalID: data.NationalID || '',
-      JobTitleAR: data.JobTitleAR || '',
-      JobTitleEN: data.JobTitleEN || '',
-      DepartmentID: data.DepartmentID || 'DEP-001',
-      HireDate: data.HireDate || new Date().toISOString().split('T')[0],
-      BasicSalary: Number(data.BasicSalary) || 0,
-      CommissionType: data.CommissionType || CommissionType.NONE,
-      Status: data.Status || EmployeeStatus.ACTIVE,
-      Notes: data.Notes || '',
-      CreatedAt: new Date().toISOString(),
-      UpdatedAt: new Date().toISOString(),
-      IsDeleted: false
-    };
-
-    const current = getStoredEmployees();
-    setStoredEmployees([newEmp, ...current]);
-
-    ApiClient.post('CREATE_EMPLOYEE', data).catch(() => {});
-
-    return {
-      success: true,
-      data: newEmp,
-      message: 'تم إنشاء الموظف بنجاح',
-      timestamp: new Date().toISOString()
-    };
+    try {
+      const res = await ApiClient.post<Employee>('CREATE_EMPLOYEE', data);
+      if (res && res.success && res.data) {
+        const current = getStoredEmployees();
+        const existingIdx = current.findIndex(e => e.EmployeeID === res.data.EmployeeID);
+        if (existingIdx >= 0) {
+          current[existingIdx] = res.data;
+          setStoredEmployees(current);
+        } else {
+          setStoredEmployees([res.data, ...current]);
+        }
+        return res;
+      }
+      return {
+        success: false,
+        data: null as any,
+        message: res?.message || 'فشل حفظ بيانات الموظف في الخادم.',
+        error: res?.error,
+        timestamp: new Date().toISOString()
+      };
+    } catch (e: any) {
+      console.error('Failed to create employee:', e);
+      return {
+        success: false,
+        data: null as any,
+        message: e?.message || 'حدث خطأ أثناء حفظ بيانات الموظف.',
+        error: { code: 'NETWORK_ERROR', details: e?.message || '' },
+        timestamp: new Date().toISOString()
+      };
+    }
   },
 
   updateEmployee: async (data: any): Promise<ApiResponse<Employee>> => {
-    const current = getStoredEmployees();
-    const index = current.findIndex(e => e.EmployeeID === data.EmployeeID);
-    let updatedEmp = data;
-    if (index >= 0) {
-      updatedEmp = { ...current[index], ...data, UpdatedAt: new Date().toISOString() };
-      current[index] = updatedEmp;
-      setStoredEmployees([...current]);
+    try {
+      const res = await ApiClient.post<Employee>('UPDATE_EMPLOYEE', data);
+      if (res && res.success && res.data) {
+        const current = getStoredEmployees();
+        const index = current.findIndex(e => e.EmployeeID === res.data.EmployeeID);
+        if (index >= 0) {
+          current[index] = { ...current[index], ...res.data, UpdatedAt: new Date().toISOString() };
+          setStoredEmployees([...current]);
+        }
+        return res;
+      }
+      return {
+        success: false,
+        data: null as any,
+        message: res?.message || 'فشل تحديث بيانات الموظف في الخادم.',
+        error: res?.error,
+        timestamp: new Date().toISOString()
+      };
+    } catch (e: any) {
+      console.error('Failed to update employee:', e);
+      return {
+        success: false,
+        data: null as any,
+        message: e?.message || 'حدث خطأ أثناء تحديث بيانات الموظف.',
+        error: { code: 'NETWORK_ERROR', details: e?.message || '' },
+        timestamp: new Date().toISOString()
+      };
     }
-
-    ApiClient.post('UPDATE_EMPLOYEE', data).catch(() => {});
-
-    return {
-      success: true,
-      data: updatedEmp,
-      message: 'تم تحديث بيانات الموظف بنجاح',
-      timestamp: new Date().toISOString()
-    };
   },
 
   deleteEmployee: async (employeeId: string, companyId: string = 'COM-0001'): Promise<ApiResponse<any>> => {

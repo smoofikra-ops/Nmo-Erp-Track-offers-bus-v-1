@@ -148,71 +148,67 @@ export const productService = {
   },
   
   createProduct: async (data: any): Promise<ApiResponse<Product>> => {
-    const newProd: Product = {
-      ProductID: data.ProductID || `PROD-${Date.now().toString().slice(-6)}`,
-      CompanyID: data.CompanyID || 'COM-0001',
-      ProductCode: data.ProductCode || `P-${Math.floor(1000 + Math.random() * 9000)}`,
-      SKU: data.SKU || '',
-      Barcode: data.Barcode || '',
-      ArabicName: data.ArabicName || '',
-      EnglishName: data.EnglishName || '',
-      Category: data.Category || 'عام',
-      UnitType: data.UnitType || 'PIECE',
-      InventoryUnitName: data.InventoryUnitName || 'قطعة',
-      OfferUnitName: data.OfferUnitName || 'قطعة',
-      OfferUnitsPerInventoryItem: Number(data.OfferUnitsPerInventoryItem) || 1,
-      PiecesPerOfferUnit: Number(data.PiecesPerOfferUnit) || 1,
-      SellingPrice: Number(data.SellingPrice) || 0,
-      SellingPriceExVAT: Number(data.SellingPriceExVAT) || 0,
-      SellingPriceIncVAT: Number(data.SellingPriceIncVAT) || Number(data.SellingPrice) || 0,
-      PurchaseCostExVAT: Number(data.PurchaseCostExVAT) || 0,
-      PurchaseCostIncVAT: Number(data.PurchaseCostIncVAT) || 0,
-      MarketPricePerOfferUnitIncVat: Number(data.MarketPricePerOfferUnitIncVat) || 0,
-      SuggestedPricePerOfferUnitIncVat: Number(data.SuggestedPricePerOfferUnitIncVat) || 0,
-      VATRate: Number(data.VATRate) || 15,
-      AvailableQuantity: Number(data.AvailableQuantity) || 0,
-      ProfitAmount: Number(data.ProfitAmount) || 0,
-      ProfitMargin: Number(data.ProfitMargin) || 0,
-      DefaultCommission: Number(data.DefaultCommission) || 0,
-      ImageURL: data.ImageURL || '',
-      Status: data.Status || ProductStatus.ACTIVE,
-      Notes: data.Notes || '',
-      CreatedAt: new Date().toISOString(),
-      UpdatedAt: new Date().toISOString(),
-      IsDeleted: false
-    };
-
-    const current = getStoredProducts();
-    setStoredProducts([newProd, ...current]);
-
-    ApiClient.post('CREATE_PRODUCT', data).catch(() => {});
-
-    return {
-      success: true,
-      data: newProd,
-      message: 'تم إضافة المنتج بنجاح',
-      timestamp: new Date().toISOString()
-    };
+    try {
+      const res = await ApiClient.post<Product>('CREATE_PRODUCT', data);
+      if (res && res.success && res.data) {
+        const current = getStoredProducts();
+        const existingIdx = current.findIndex(p => p.ProductID === res.data.ProductID);
+        if (existingIdx >= 0) {
+          current[existingIdx] = res.data;
+          setStoredProducts(current);
+        } else {
+          setStoredProducts([res.data, ...current]);
+        }
+        return res;
+      }
+      return {
+        success: false,
+        data: null as any,
+        message: res?.message || 'فشل حفظ المنتج في الخادم. يرجى التحقق من الاتصال والمحاولة مجدداً.',
+        error: res?.error,
+        timestamp: new Date().toISOString()
+      };
+    } catch (e: any) {
+      console.error('Failed to create product:', e);
+      return {
+        success: false,
+        data: null as any,
+        message: e?.message || 'حدث خطأ أثناء حفظ المنتج.',
+        error: { code: 'NETWORK_ERROR', details: e?.message || '' },
+        timestamp: new Date().toISOString()
+      };
+    }
   },
 
   updateProduct: async (data: any): Promise<ApiResponse<Product>> => {
-    const current = getStoredProducts();
-    const index = current.findIndex(p => p.ProductID === data.ProductID);
-    let updatedProd = data;
-    if (index >= 0) {
-      updatedProd = { ...current[index], ...data, UpdatedAt: new Date().toISOString() };
-      current[index] = updatedProd;
-      setStoredProducts([...current]);
+    try {
+      const res = await ApiClient.post<Product>('UPDATE_PRODUCT', data);
+      if (res && res.success && res.data) {
+        const current = getStoredProducts();
+        const index = current.findIndex(p => p.ProductID === res.data.ProductID);
+        if (index >= 0) {
+          current[index] = { ...current[index], ...res.data, UpdatedAt: new Date().toISOString() };
+          setStoredProducts([...current]);
+        }
+        return res;
+      }
+      return {
+        success: false,
+        data: null as any,
+        message: res?.message || 'فشل تحديث المنتج في الخادم.',
+        error: res?.error,
+        timestamp: new Date().toISOString()
+      };
+    } catch (e: any) {
+      console.error('Failed to update product:', e);
+      return {
+        success: false,
+        data: null as any,
+        message: e?.message || 'حدث خطأ أثناء تحديث المنتج.',
+        error: { code: 'NETWORK_ERROR', details: e?.message || '' },
+        timestamp: new Date().toISOString()
+      };
     }
-
-    ApiClient.post('UPDATE_PRODUCT', data).catch(() => {});
-
-    return {
-      success: true,
-      data: updatedProd,
-      message: 'تم تحديث المنتج بنجاح',
-      timestamp: new Date().toISOString()
-    };
   },
 
   deleteProduct: async (productId: string, companyId: string = 'COM-0001'): Promise<ApiResponse<any>> => {

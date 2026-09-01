@@ -201,12 +201,25 @@ export function PrintableCommissionSummary({
                  <h4 className="text-[10px] font-bold text-slate-700 uppercase mb-2 border-b border-slate-300 pb-1">تفاصيل المدفوعات والتسويات</h4>
                  <div className="space-y-1.5 text-[10px]">
                    {record.paymentItems && record.paymentItems.length > 0 ? (
-                     record.paymentItems.map((item) => (
-                       <div key={item.id} className="flex justify-between items-center border-b border-slate-100 pb-1">
-                         <span className="text-slate-600 truncate max-w-[120px]" title={item.description || getPaymentMethodLabel(item.method)}>{item.description || getPaymentMethodLabel(item.method)}</span>
-                         <span className="font-mono font-bold text-slate-900">{item.amount.toFixed(2)}</span>
-                       </div>
-                     ))
+                     record.paymentItems.map((item) => {
+                       const methodLabel = getPaymentMethodLabel(item.method);
+                       const hasCustomDesc = item.description && item.description.trim() !== '' && item.description.trim() !== methodLabel;
+                       return (
+                         <div key={item.id} className="flex justify-between items-start border-b border-slate-100 pb-1 gap-1">
+                           <div className="flex flex-col text-right min-w-0">
+                             <span className="font-bold text-slate-800">{methodLabel}</span>
+                             {hasCustomDesc && (
+                               <span className="text-[9px] text-slate-500 truncate max-w-[120px]" title={item.description}>
+                                 {item.description}
+                               </span>
+                             )}
+                           </div>
+                           <span className="font-mono font-bold text-slate-900 shrink-0">
+                             {Number(item.amount || 0).toFixed(2)}
+                           </span>
+                         </div>
+                       );
+                     })
                    ) : (
                      <div className="text-center text-slate-400 italic">التفاصيل مدمجة</div>
                    )}

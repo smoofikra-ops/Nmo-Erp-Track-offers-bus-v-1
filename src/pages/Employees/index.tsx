@@ -5,10 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Edit, Trash2, RotateCcw, AlertCircle, Save } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, RotateCcw, AlertCircle, Save, CreditCard, ShieldCheck } from 'lucide-react';
 import { employeeService } from '@/services/employeeService';
 import { archiveService } from '@/services/archiveService';
 import { Employee, EmployeeStatus, CommissionType } from '@/types';
+import { calculateExpiryStatus } from '@/data/fleetMasterData';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -51,6 +52,12 @@ export function Employees() {
   const [commissionType, setCommissionType] = useState<CommissionType | ''>('');
   const [status, setStatus] = useState<EmployeeStatus | ''>('');
   const [notes, setNotes] = useState('');
+
+  // Driver License Fields (Employee is the Source of Truth)
+  const [drivingLicenseNumber, setDrivingLicenseNumber] = useState('');
+  const [drivingLicenseType, setDrivingLicenseType] = useState('خصوصي');
+  const [drivingLicenseIssueDate, setDrivingLicenseIssueDate] = useState('');
+  const [drivingLicenseExpiryDate, setDrivingLicenseExpiryDate] = useState('');
   
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -65,6 +72,10 @@ export function Employees() {
     setCommissionType(CommissionType.SALARY_AND_COMMISSION);
     setStatus(EmployeeStatus.ACTIVE);
     setNotes('');
+    setDrivingLicenseNumber('');
+    setDrivingLicenseType('خصوصي');
+    setDrivingLicenseIssueDate('');
+    setDrivingLicenseExpiryDate('');
     setErrorMsg('');
     setIsFormOpen(false);
   };
@@ -81,6 +92,10 @@ export function Employees() {
       setCommissionType(emp.CommissionType);
       setStatus(emp.Status);
       setNotes(emp.Notes || '');
+      setDrivingLicenseNumber(emp.DrivingLicenseNumber || '');
+      setDrivingLicenseType(emp.DrivingLicenseType || 'خصوصي');
+      setDrivingLicenseIssueDate(emp.DrivingLicenseIssueDate ? emp.DrivingLicenseIssueDate.split('T')[0] : '');
+      setDrivingLicenseExpiryDate(emp.DrivingLicenseExpiryDate ? emp.DrivingLicenseExpiryDate.split('T')[0] : '');
       setIsFormOpen(true);
     });
   };
@@ -95,22 +110,22 @@ export function Employees() {
       }
     },
     onSuccess: async (res) => {
-      if (res.success) {
+      if (res && res.success) {
         setIsFormOpen(false);
         resetForm();
-        toast.success('تم حفظ بيانات الموظف بنجاح.');
+        toast.success('تم حفظ بيانات الموظف بنجاح في قاعدة البيانات.');
         await queryClient.invalidateQueries({ queryKey: ['employees', companyId] });
       } else {
         console.error('Save error details:', res);
-        if ((typeof res.error?.details === 'string' && res.error.details.includes('DuplicateMobile')) || (typeof res.message === 'string' && res.message.includes('DuplicateMobile'))) {
+        if ((typeof res?.error?.details === 'string' && res.error.details.includes('DuplicateMobile')) || (typeof res?.message === 'string' && res.message.includes('DuplicateMobile'))) {
           setErrorMsg(t('employees.duplicateMobile', 'رقم الجوال مسجل مسبقاً.'));
         } else {
-          setErrorMsg('تعذر حفظ بيانات الموظف. يرجى المحاولة لاحقاً.');
+          setErrorMsg(res?.message || 'تعذر حفظ بيانات الموظف. يرجى المحاولة لاحقاً.');
         }
       }
     },
     onError: (e: any) => {
-      setErrorMsg(e.message || 'An error occurred');
+      setErrorMsg(e?.message || 'حدث خطأ في الاتصال بالخادم.');
     }
   });
 
@@ -154,6 +169,8 @@ export function Employees() {
     
     setErrorMsg('');
 
+    const licenseExpiryStatus = drivingLicenseExpiryDate ? calculateExpiryStatus(drivingLicenseExpiryDate).status : '';
+
     const payload: any = {
       CompanyID: companyId,
       ArabicName: arabicName,
@@ -164,7 +181,12 @@ export function Employees() {
       BasicSalary: parseFloat(basicSalary) || 0,
       CommissionType: commissionType,
       Status: status,
-      Notes: notes
+      Notes: notes,
+      DrivingLicenseNumber: drivingLicenseNumber.trim(),
+      DrivingLicenseType: drivingLicenseType,
+      DrivingLicenseIssueDate: drivingLicenseIssueDate,
+      DrivingLicenseExpiryDate: drivingLicenseExpiryDate,
+      DrivingLicenseStatus: licenseExpiryStatus
     };
 
     saveMutation.mutate(payload);
@@ -288,6 +310,85 @@ export function Employees() {
                 </select>
               </div>
             </div>
+
+            {/* Driver License Section (Source of Truth for Driver Data) */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">بيانات رخصة القيادة</h4>
+                    <p className="text-[11px] text-slate-500">سجل رخصة القيادة للموظفين والسائقين (المصدر المعتمد للنظام)</p>
+                  </div>
+                </div>
+
+                {drivingLicenseExpiryDate && (
+                  <div className="text-xs">
+                    {(() => {
+                      const exp = calculateExpiryStatus(drivingLicenseExpiryDate);
+                      return (
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${exp.badgeClass}`}>
+                          {exp.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid md:grid-cols-4 gap-3 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">رقم رخصة القيادة</label>
+                  <input 
+                    type="text" 
+                    placeholder="مثال: 1098765432"
+                    className="w-full h-9 px-3 rounded-lg border bg-white dark:bg-slate-900 text-xs font-mono" 
+                    value={drivingLicenseNumber} 
+                    onChange={e => setDrivingLicenseNumber(e.target.value)} 
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">نوع / فئة الرخصة</label>
+                  <select 
+                    className="w-full h-9 px-3 rounded-lg border bg-white dark:bg-slate-900 text-xs" 
+                    value={drivingLicenseType} 
+                    onChange={e => setDrivingLicenseType(e.target.value)}
+                  >
+                    <option value="خصوصي">خصوصي</option>
+                    <option value="عمومي نقل خفيف">عمومي نقل خفيف</option>
+                    <option value="عمومي نقل ثقيل">عمومي نقل ثقيل</option>
+                    <option value="عمومي حافلة">عمومي حافلة</option>
+                    <option value="دراجة نارية">دراجة نارية</option>
+                    <option value="معدات ثقيلة">معدات ثقيلة</option>
+                    <option value="أخرى">أخرى</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">تاريخ الإصدار</label>
+                  <input 
+                    type="date" 
+                    className="w-full h-9 px-2.5 rounded-lg border bg-white dark:bg-slate-900 text-xs" 
+                    value={drivingLicenseIssueDate} 
+                    onChange={e => setDrivingLicenseIssueDate(e.target.value)} 
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">تاريخ الانتهاء</label>
+                  <input 
+                    type="date" 
+                    className="w-full h-9 px-2.5 rounded-lg border bg-white dark:bg-slate-900 text-xs" 
+                    value={drivingLicenseExpiryDate} 
+                    onChange={e => setDrivingLicenseExpiryDate(e.target.value)} 
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">{t('common.notes', 'Notes')}</label>
               <textarea className="w-full p-3 rounded-md border min-h-[80px]" value={notes} onChange={e => setNotes(e.target.value)} />
@@ -410,6 +511,7 @@ export function Employees() {
                 <th className="px-6 py-4 font-medium">{t('employees.code', 'Code')}</th>
                 <th className="px-6 py-4 font-medium">{t('employees.arabicName', 'Name')}</th>
                 <th className="px-6 py-4 font-medium">{t('employees.mobile', 'Mobile')}</th>
+                <th className="px-6 py-4 font-medium">رخصة القيادة</th>
                 <th className="px-6 py-4 font-medium">{t('employees.commissionType', 'Commission')}</th>
                 <th className="px-6 py-4 font-medium">{t('common.status', 'Status')}</th>
                 <th className="px-6 py-4 font-medium text-right">{t('common.actions', 'Actions')}</th>
@@ -418,12 +520,14 @@ export function Employees() {
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
                     No records match your filters.
                   </td>
                 </tr>
               ) : filtered.map((e, i) => {
                 const isDeleted = e.IsDeleted === true || (e.IsDeleted as any) === 'TRUE' || (e.IsDeleted as any) === 'true';
+                const licenseExp = e.DrivingLicenseExpiryDate ? calculateExpiryStatus(e.DrivingLicenseExpiryDate) : null;
+
                 return (
                   <tr key={i} className={cn("transition-colors", isDeleted ? "bg-red-50/50 opacity-60" : "hover:bg-slate-50/50")}>
                     <td className="px-6 py-4 font-medium">{e.EmployeeCode}</td>
@@ -432,6 +536,22 @@ export function Employees() {
                       {e.Alias && <div className="text-xs text-slate-500">{e.Alias}</div>}
                     </td>
                     <td className="px-6 py-4 text-slate-600">{e.Mobile || '-'}</td>
+                    <td className="px-6 py-4 text-xs">
+                      {e.DrivingLicenseNumber ? (
+                        <div className="space-y-0.5">
+                          <div className="font-mono font-medium text-slate-800">{e.DrivingLicenseNumber}</div>
+                          {licenseExp ? (
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] border ${licenseExp.badgeClass}`}>
+                              {licenseExp.label}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">سارية</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-xs">
                       <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full">{getCommissionTypeLabel(e.CommissionType)}</span>
                     </td>
@@ -473,6 +593,8 @@ export function Employees() {
             ) : (
               filtered.map((e, i) => {
                 const isDeleted = e.IsDeleted === true || (e.IsDeleted as any) === 'TRUE' || (e.IsDeleted as any) === 'true';
+                const licenseExp = e.DrivingLicenseExpiryDate ? calculateExpiryStatus(e.DrivingLicenseExpiryDate) : null;
+
                 return (
                   <div key={i} className={`bg-white border ${isDeleted ? 'border-red-200 bg-red-50' : 'border-slate-100'} rounded-lg p-4 mb-3 space-y-3 shadow-sm`}>
                     <div className="flex justify-between items-start border-b pb-2">
@@ -493,6 +615,20 @@ export function Employees() {
                       <span className="text-slate-600">{t('employees.mobile', 'Mobile')}:</span>
                       <span className="font-medium text-slate-800" dir="ltr">{e.Mobile}</span>
                     </div>
+
+                    {e.DrivingLicenseNumber && (
+                      <div className="flex justify-between items-center text-xs py-1 px-2 rounded bg-slate-50 border border-slate-100">
+                        <span className="text-slate-600 font-medium">رخصة القيادة:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-slate-800">{e.DrivingLicenseNumber}</span>
+                          {licenseExp && (
+                            <span className={`px-1.5 py-0.2 rounded text-[10px] border ${licenseExp.badgeClass}`}>
+                              {licenseExp.label}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-slate-600">{t('employees.commissionType', 'Commission')}:</span>

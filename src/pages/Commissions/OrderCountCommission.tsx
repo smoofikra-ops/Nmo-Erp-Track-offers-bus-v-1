@@ -169,11 +169,14 @@ export function OrderCountCommission() {
   const saveMutation = useMutation({
     mutationFn: (record: CommissionRecord) => commissionService.saveCommissionRecord(record),
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
-      queryClient.invalidateQueries({ queryKey: ['commissionReceipts'] });
-      
-      toast.success('تم حفظ سجل العمولة بنجاح');
-      navigate('/commission/records');
+      if (res && res.success) {
+        queryClient.invalidateQueries({ queryKey: ['commissionRecords'] });
+        queryClient.invalidateQueries({ queryKey: ['commissionReceipts'] });
+        toast.success('تم حفظ سجل العمولة بنجاح في قاعدة البيانات');
+        navigate('/commission/records');
+      } else {
+        toast.error('فشل الحفظ: ' + (res?.message || 'لم يتم تأكيد الحفظ في الخادم'));
+      }
     },
     onError: (err: any) => {
       console.error(err);

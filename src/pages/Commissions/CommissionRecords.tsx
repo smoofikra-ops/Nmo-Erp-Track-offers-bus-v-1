@@ -592,20 +592,22 @@ export function CommissionRecords() {
             </div>
 
             {canViewFinancials && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-700">الملخص المالي التفصيلي:</h4>
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-700">الملخص المالي وتفاصيل العمليات:</h4>
+                
+                {/* Financial Summary Box */}
                 <div className="rounded-xl border border-slate-200 overflow-hidden text-xs">
                   <div className="flex justify-between p-2.5 bg-slate-50 border-b">
-                    <span>إجمالي قيمة الطلب:</span>
+                    <span>إجمالي قيمة الطلب / المبالغ المطلوبة:</span>
                     <span className="font-bold">{(viewRecordModal.totalRequiredAmount || viewRecordModal.totalOrderValue || 0).toFixed(2)} ر.س</span>
                   </div>
                   <div className="flex justify-between p-2.5 border-b">
-                    <span>المبلغ المدفوع أونلاين:</span>
+                    <span>إجمالي المدفوعات والتسويات:</span>
                     <span className="font-bold text-blue-700">{(viewRecordModal.onlinePaidAmount || 0).toFixed(2)} ر.س</span>
                   </div>
                   <div className="flex justify-between p-2.5 bg-slate-50 border-b">
-                    <span>الدفع عند الاستلام (COD):</span>
-                    <span className="font-bold text-amber-700">{viewRecordModal.codRequiredAmount?.toFixed(2) || '0.00'} ر.س</span>
+                    <span>الدفع عند الاستلام (COD) / المبلغ المتبقي:</span>
+                    <span className="font-bold text-amber-700">{viewRecordModal.codRequiredAmount?.toFixed(2) || viewRecordModal.finalRequiredAmount?.toFixed(2) || '0.00'} ر.س</span>
                   </div>
                   <div className="flex justify-between p-2.5 border-b">
                     <span>إجمالي العمولة قبل الخصم:</span>
@@ -622,6 +624,43 @@ export function CommissionRecords() {
                     </span>
                   </div>
                 </div>
+
+                {/* Detailed Payment & Settlement Methods Breakdown */}
+                {(() => {
+                  const payments = safeParseArray(viewRecordModal.paymentItems);
+                  if (!payments || payments.length === 0) return null;
+                  return (
+                    <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-200 text-xs space-y-2">
+                      <div className="font-bold text-slate-800 flex items-center justify-between border-b pb-1.5">
+                        <span>تفاصيل طرق الدفع والتسويات المحفوظة:</span>
+                        <span className="text-[11px] font-mono text-blue-700">
+                          {payments.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0).toFixed(2)} ر.س
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                        {payments.map((p: any, idx: number) => {
+                          const methodLabel = getPaymentMethodLabel(p.method);
+                          const hasCustomDesc = p.description && p.description.trim() !== '' && p.description.trim() !== methodLabel;
+                          return (
+                            <div key={idx} className="flex justify-between items-center py-1 px-2 bg-white rounded border border-slate-100">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                                  {methodLabel}
+                                </span>
+                                {hasCustomDesc && (
+                                  <span className="text-slate-500 text-[11px]">{p.description}</span>
+                                )}
+                              </div>
+                              <span className="font-mono font-bold text-slate-900">
+                                {Number(p.amount || 0).toFixed(2)} ر.س
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 

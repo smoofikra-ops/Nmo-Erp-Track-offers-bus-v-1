@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Vehicle, OperationalStatus, VehicleType } from '@/types/fleet';
+import { Employee } from '@/types/models';
 import { fleetService } from '@/services/fleetService';
+import { employeeService } from '@/services/employeeService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdminAuth } from '@/contexts/AdminSecurityContext';
 import { VehicleCard } from './components/VehicleCard';
@@ -41,8 +43,36 @@ export default function FleetPage() {
     staleTime: 1000 * 60 * 3,
   });
 
+  const { data: employeesRes } = useQuery({
+    queryKey: ['employees', companyId],
+    queryFn: () => employeeService.getEmployees(companyId),
+    enabled: Boolean(companyId),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const employees: Employee[] = employeesRes?.data || [];
   const vehicles: Vehicle[] = vehiclesRes?.data || [];
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
+
+  const getLinkedEmployee = (v: Vehicle): Employee | null => {
+    if (!employees || employees.length === 0) return null;
+    const empId = v.Assigned_Employee_ID || v.Primary_Driver_ID;
+    if (empId) {
+      const found = employees.find(e => e.EmployeeID === empId);
+      if (found) return found;
+    }
+    const name = v.Assigned_User_Name || v.Primary_Driver_Name || (v as any).Driver_Name;
+    if (name && typeof name === 'string' && name.trim() !== '') {
+      const trimmed = name.trim().toLowerCase();
+      const found = employees.find(e => 
+        (e.ArabicName && e.ArabicName.trim().toLowerCase() === trimmed) ||
+        (e.EnglishName && e.EnglishName.trim().toLowerCase() === trimmed) ||
+        (e.Alias && e.Alias.trim().toLowerCase() === trimmed)
+      );
+      if (found) return found;
+    }
+    return null;
+  };
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -492,6 +522,7 @@ export default function FleetPage() {
             <VehicleCard
               key={`${vehicle.Vehicle_ID}-${index}`}
               vehicle={vehicle}
+              linkedEmployee={getLinkedEmployee(vehicle)}
               onViewDetails={(id) => setSelectedVehicleId(id)}
               onEdit={(v) => {
                 setEditingVehicle(v);
